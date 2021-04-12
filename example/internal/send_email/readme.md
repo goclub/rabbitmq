@@ -28,7 +28,7 @@
 
 ### 队列
 
-1. 名称: q_send_email (约定 q 前缀表示是交换机)
+1. 名称: q_send_email (约定 q 前缀表示是队列)
 3. 持久化：true
 
 ### 队列绑定交换机
@@ -43,7 +43,7 @@
 确保在 send_email 目录下后按顺序运行
 
 ```shell
-# 定义队列交换机
+# 定义队列交换机（采取集中管理交换机和队列的方式）
 go run cmd/migrate/main.go
 # 启动消费端
 go run cmd/consume/main.go

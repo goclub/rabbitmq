@@ -5,6 +5,7 @@ import (
 	"log"
 )
 
+// 集中管理交换机和队列
 func main (){
 	log.Print("rabbitmq migrate start")
 	conn, err := emailMessageQueue.NewConnect() ; if err != nil {

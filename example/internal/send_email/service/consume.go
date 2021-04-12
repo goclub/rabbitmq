@@ -23,7 +23,7 @@ func ConsumeSendEmail(mqCh *amqp.Channel) (err error) {
 			log.Print("consume: from " + msg.From + ", to " + msg.To + "(" + msg.Subject + ")")
 			// 消费完成后应答消息处理完成
 			err = d.Ack(false) ; if err != nil {
-				return err
+				log.Print(err) // 记录错误到日志或监控系统而不是退出，单个消息消费失败并不一定要让消费端停止工作
 			}
 		}
 		return nil
