@@ -18,8 +18,10 @@ func main () {
 	}
 	notifyReturn := mqCh.NotifyReturn(make(chan amqp.Return))
 	go func() {
-		data := <- notifyReturn
-		log.Print("消息没有被发送到队列(业务中可以存入db和监控系统进一步处理)" + string(data.Body))
+		// 使用 for 持续的获取结果，如果没有 for 直接  data := <- notifyREturn 会导致只能获取第一次的通知
+		for data := range notifyReturn {
+			log.Print("消息没有被发送到队列(业务中可以存入db和监控系统进一步处理)" + string(data.Body))
+		}
 	}()
 	log.Print("start mesasge done")
 	err = emailService.SendEmail(emailService.Email{
