@@ -55,7 +55,6 @@ func main() {
 		panic(err)
 	}
 	*/
-	 */
 	// 声明业务用队列
 	_,  err = mqCh.QueueDeclare(rabmq.QueueDeclare{
 		Name: "q_example_time",
