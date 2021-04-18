@@ -37,7 +37,7 @@ message  -->  x_example_time   -->  q_example_time
 ```
 
 ```go
-// queue declare dq_example_time 参数
+// queue declare dlq_example_time 参数
 Args: map[string]interface{}{
     "x-dead-letter-exchange": "dlx_example_time",
 }
