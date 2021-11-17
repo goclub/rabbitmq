@@ -31,18 +31,18 @@ func Model() (m struct {
 	return
 }
 
-func NewConnect() (conn *amqp.Connection, err error) {
-	return amqp.Dial("amqp://guest:guest@localhost:5672/")
+func NewConnect() (conn *rabmq.ProxyConnection, err error) {
+	return rabmq.Dial("amqp://guest:guest@localhost:5672/")
 }
 
-func InitDeclareAndBind(mqCh *amqp.Channel) (err error) {
-	err = mqCh.ExchangeDeclare(Model().FanoutExchange.SendEmail.Flat()) ; if err != nil {
+func InitDeclareAndBind(mqCh *rabmq.ProxyChannel) (err error) {
+	err = mqCh.ExchangeDeclare(Model().FanoutExchange.SendEmail) ; if err != nil {
 		return
 	}
-	_, err = mqCh.QueueDeclare(Model().Queue.SendEmail.Flat()) ; if err != nil {
+	_, err = mqCh.QueueDeclare(Model().Queue.SendEmail) ; if err != nil {
 		return
 	}
-	err = mqCh.QueueBind(Model().Queue.SendEmailBind.Flat()) ; if err != nil {
+	err = mqCh.QueueBind(Model().Queue.SendEmailBind) ; if err != nil {
 		return
 	}
 	return

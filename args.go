@@ -8,7 +8,7 @@ func (name ExchangeName) String() string {
 }
 type ExchangeDeclare struct {
 	Name ExchangeName // 交换器的名称
-	Kind string // 交换器类型 amqp.ExchangeFanout amqp.ExchangeFanout amqp.ExchangeTopic amqp.ExchangeHeaders
+	Kind string // 交换器类型 amqp.ExchangeDirect amqp.ExchangeFanout amqp.ExchangeTopic amqp.ExchangeHeaders
 	Durable bool // 设置是否持久化。durable设置为true表示持久化，反之是非持久化。持久化可以将交换器存盘，在服务器重启的时候不会丢失相关信息。
 	AutoDelete bool // 设置是否自动删除。autoDelete设置为true则表示自动删除。自动删除的前提是至少有一个队列或者交换器与这个交换器绑定，之后所有与这个交换器绑定的队列或者交换器都与此解绑。注意不能错误地把这个参数理解为：“当与此交换器连接的客户端都断开时，RabbitMQ会自动删除本交换器
 	Internal bool // 设置是否是内置的。如果设置为true，则表示是内置的交换器，客户端程序无法直接发送消息到这个交换器中，只能通过交换器路由到交换器这种方式。
@@ -114,8 +114,8 @@ type Publish struct {
 	Exchange ExchangeName // 交换机名
 	RoutingKey RoutingKey
 	Mandatory bool // mandatory参数告诉服务器至少将该消息路由到一个队列中，否则将消息返回给生产者。
-	Immediate bool // RabbitMQ 3.0版本开始去掉了对immediate参数的支持， immediate参数告诉服务器，如果该消息关联的队列上有消费者，则立刻投递；如果所有匹配的队列上都没有消费者，则直接将消息返还给生产者，不用将消息存入队列而等待消费者了。
 	Msg amqp.Publishing
+	Immediate bool // RabbitMQ 3.0版本开始去掉了对immediate参数的支持， immediate参数告诉服务器，如果该消息关联的队列上有消费者，则立刻投递；如果所有匹配的队列上都没有消费者，则直接将消息返还给生产者，不用将消息存入队列而等待消费者了。
 }
 func (v Publish) Flat() (exchange, key string, mandatory, immediate bool, msg amqp.Publishing) {
 	return v.Exchange.String(), v.RoutingKey.String(), v.Mandatory, v.Immediate, v.Msg

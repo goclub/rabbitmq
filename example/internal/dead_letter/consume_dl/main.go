@@ -3,13 +3,12 @@ package main
 import (
 	rabmq "github.com/goclub/rabbitmq"
 	xsync "github.com/goclub/sync"
-	"github.com/streadway/amqp"
 	"log"
 )
 
 func main() {
 	log.Print("consume dl")
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/") ; if err != nil {
+	conn, err := rabmq.Dial("amqp://guest:guest@localhost:5672/") ; if err != nil {
 		panic(err)
 	}
 	mqCh, err := conn.Channel() ; if err != nil {
@@ -18,7 +17,7 @@ func main() {
 	// 消费死信队列消息
 	msgs, err := mqCh.Consume(rabmq.Consume{
 		Queue: rabmq.QueueName("dlq_example_time"),
-	}.Flat()) ; if err != nil {
+	}) ; if err != nil {
 		panic(err)
 	}
 	routine := xsync.Routine{}

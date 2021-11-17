@@ -5,14 +5,13 @@ import (
 	rabmq "github.com/goclub/rabbitmq"
 	"github.com/goclub/rabbitmq/example/internal/send_email/mq"
 	xsync "github.com/goclub/sync"
-	"github.com/streadway/amqp"
 	"log"
 )
 
-func ConsumeSendEmail(mqCh *amqp.Channel) (err error) {
+func ConsumeSendEmail(mqCh *rabmq.ProxyChannel) (err error) {
 	msgs, err := mqCh.Consume(rabmq.Consume{
 		Queue: emailMessageQueue.Model().Queue.SendEmail.Name,
-	}.Flat())
+	})
 	routine := xsync.Routine{}
 	routine.Go(func() error {
 		for d := range msgs {

@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/") ; if err != nil {
+	conn, err := rabmq.Dial("amqp://guest:guest@localhost:5672/") ; if err != nil {
 		panic(err)
 	}
 	mqCh, err := conn.Channel() ; if err != nil {
@@ -24,7 +24,7 @@ func main() {
 			ContentType: "text/plain",
 			Body: []byte(text),
 		},
-	}.Flat()) ; if err != nil {
+	}) ; if err != nil {
 		panic(err)
 	}
 }
