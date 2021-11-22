@@ -1,29 +1,29 @@
 package emailMessageQueue
 
 import (
-	rabmq "github.com/goclub/rabbitmq"
+	rab "github.com/goclub/rabbitmq"
 	"github.com/streadway/amqp"
 )
 
 func Model() (m struct {
 	FanoutExchange struct{
-		SendEmail rabmq.ExchangeDeclare
+		SendEmail rab.ExchangeDeclare
 	}
 	Queue struct {
-		SendEmail rabmq.QueueDeclare
-		SendEmailBind rabmq.QueueBind
+		SendEmail rab.QueueDeclare
+		SendEmailBind rab.QueueBind
 	}
 }) {
-	m.FanoutExchange.SendEmail = rabmq.ExchangeDeclare{
+	m.FanoutExchange.SendEmail = rab.ExchangeDeclare{
 		Name: "x_send_email",
 		Kind: amqp.ExchangeFanout,
 		Durable: true,
 	}
-	m.Queue.SendEmail = rabmq.QueueDeclare{
+	m.Queue.SendEmail = rab.QueueDeclare{
 		Name: "q_send_email",
 		Durable: true,
 	}
-	m.Queue.SendEmailBind = rabmq.QueueBind{
+	m.Queue.SendEmailBind = rab.QueueBind{
 		Queue: m.Queue.SendEmail.Name,
 		RoutingKey: "", // fanout 不需要 routing key
 		Exchange: m.FanoutExchange.SendEmail.Name,
@@ -31,11 +31,11 @@ func Model() (m struct {
 	return
 }
 
-func NewConnect() (conn *rabmq.ProxyConnection, err error) {
-	return rabmq.Dial("amqp://guest:guest@localhost:5672/")
+func NewConnect() (conn *rab.ProxyConnection, err error) {
+	return rab.Dial("amqp://guest:guest@localhost:5672/")
 }
 
-func InitDeclareAndBind(mqCh *rabmq.ProxyChannel) (err error) {
+func InitDeclareAndBind(mqCh *rab.ProxyChannel) (err error) {
 	err = mqCh.ExchangeDeclare(Model().FanoutExchange.SendEmail) ; if err != nil {
 		return
 	}

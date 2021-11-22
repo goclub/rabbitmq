@@ -1,4 +1,4 @@
-package rabmq
+package rab
 
 import (
 	"github.com/streadway/amqp"

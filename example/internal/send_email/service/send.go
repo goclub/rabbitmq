@@ -1,7 +1,7 @@
 package emailService
 
 import (
-	rabmq "github.com/goclub/rabbitmq"
+	rab "github.com/goclub/rabbitmq"
 	"github.com/goclub/rabbitmq/example/internal/send_email/mq"
 )
 
@@ -10,7 +10,7 @@ type Email struct {
 	To string
 	Subject string
 }
-func SendEmail(email Email, mqCh *rabmq.ProxyChannel) (err error) {
+func SendEmail(email Email, mqCh *rab.ProxyChannel) (err error) {
 	msg, err := emailMessageQueue.SendEmailMessage{
 		From: "news@goclub.io",
 		To: email.To,
@@ -18,7 +18,7 @@ func SendEmail(email Email, mqCh *rabmq.ProxyChannel) (err error) {
 	}.Publishing() ; if err != nil {
 		return
 	}
-	return mqCh.Publish(rabmq.Publish{
+	return mqCh.Publish(rab.Publish{
 		Exchange:   emailMessageQueue.Model().FanoutExchange.SendEmail.Name,
 		RoutingKey: "", // fanout 不需要 key
 		Mandatory:  true, // 要确保消息能到队列（配合 Channel{}.NotifyReturn ）

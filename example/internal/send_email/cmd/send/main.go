@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	rabmq "github.com/goclub/rabbitmq"
+	rab "github.com/goclub/rabbitmq"
 	"github.com/goclub/rabbitmq/example/internal/send_email/mq"
 	"github.com/goclub/rabbitmq/example/internal/send_email/service"
 	"github.com/streadway/amqp"
@@ -12,7 +12,7 @@ import (
 )
 
 func main () {
-	rabmq.Debug = true
+	rab.Debug = true
 	conn, err := emailMessageQueue.NewConnect() ; if err != nil {
 		panic(err)
 	}

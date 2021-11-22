@@ -2,14 +2,14 @@ package emailService
 
 import (
 	"fmt"
-	rabmq "github.com/goclub/rabbitmq"
+	rab "github.com/goclub/rabbitmq"
 	"github.com/goclub/rabbitmq/example/internal/send_email/mq"
 	xsync "github.com/goclub/sync"
 	"log"
 )
 
-func ConsumeSendEmail(mqCh *rabmq.ProxyChannel) (err error) {
-	msgs, err := mqCh.Consume(rabmq.Consume{
+func ConsumeSendEmail(mqCh *rab.ProxyChannel) (err error) {
+	msgs, err := mqCh.Consume(rab.Consume{
 		Queue: emailMessageQueue.Model().Queue.SendEmail.Name,
 	})
 	routine := xsync.Routine{}

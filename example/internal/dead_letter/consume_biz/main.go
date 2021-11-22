@@ -1,22 +1,22 @@
 package main
 
 import (
-	rabmq "github.com/goclub/rabbitmq"
+	rab "github.com/goclub/rabbitmq"
 	xsync "github.com/goclub/sync"
 	"log"
 )
 
 func main() {
 	log.Print("consume biz")
-	conn, err := rabmq.Dial("amqp://guest:guest@localhost:5672/") ; if err != nil {
+	conn, err := rab.Dial("amqp://guest:guest@localhost:5672/") ; if err != nil {
 		panic(err)
 	}
 	mqCh, err := conn.Channel() ; if err != nil {
 		panic(err)
 	}
 	// 消费业务消息
-	msgs, err := mqCh.Consume(rabmq.Consume{
-		Queue: rabmq.QueueName("q_example_time"),
+	msgs, err := mqCh.Consume(rab.Consume{
+		Queue: rab.QueueName("q_example_time"),
 	}) ; if err != nil {
 		panic(err)
 	}

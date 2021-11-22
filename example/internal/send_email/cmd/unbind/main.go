@@ -1,7 +1,7 @@
 package main
 
 import (
-	rabmq "github.com/goclub/rabbitmq"
+	rab "github.com/goclub/rabbitmq"
 	"github.com/goclub/rabbitmq/example/internal/send_email/mq"
 	"log"
 )
@@ -15,7 +15,7 @@ func main() {
 	mqCh, err := conn.Channel() ; if err != nil {
 		panic(err)
 	}
-	err = mqCh.QueueUnbind(rabmq.QueueUnbind{
+	err = mqCh.QueueUnbind(rab.QueueUnbind{
 		Queue:      emailMessageQueue.Model().Queue.SendEmail.Name,
 		RoutingKey: "",
 		Exchange:   emailMessageQueue.Model().FanoutExchange.SendEmail.Name,
