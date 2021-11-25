@@ -12,12 +12,15 @@ import (
 )
 
 func main () {
+	log.Printf("%+v", run())
+}
+func run () (err error) {
 	rab.Debug = true
 	conn, err := emailMessageQueue.NewConnect() ; if err != nil {
-		panic(err)
+		return
 	}
 	mqCh, err := conn.Channel() ; if err != nil {
-		panic(err)
+		return
 	}
 	log.Print("start mesasge done")
 	for {
@@ -35,5 +38,4 @@ func main () {
 		time.Sleep(1* time.Second)
 		log.Print("send mesasge")
 	}
-
 }

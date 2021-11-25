@@ -11,7 +11,9 @@ import (
 func ConsumeSendEmail(mqCh *rab.ProxyChannel) (err error) {
 	msgs, err := mqCh.Consume(rab.Consume{
 		Queue: emailMessageQueue.Model().Queue.SendEmail.Name,
-	})
+	}) ; if err != nil {
+	    return
+	}
 	routine := xsync.Routine{}
 	routine.Go(func() error {
 		for d := range msgs {

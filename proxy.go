@@ -2,6 +2,7 @@ package rab
 
 import (
 	"github.com/streadway/amqp"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -94,14 +95,30 @@ func (conn *ProxyConnection) Channel() (channel *ProxyChannel, err error){
 
 func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery,error) {
 	deliveries := make(chan amqp.Delivery)
+	queue, consumer, autoAck, exclusive, noLocal, noWait , args := consume.Flat()
+	firstTimeErrHandleOnce := sync.Once{}
+	firstTimeErrCh := make(chan error)
 	go func() {
 		for {
-			queue, consumer, autoAck, exclusive, noLocal, noWait , args := consume.Flat()
-			d, err := channel.Channel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait , args) ; if err != nil {
+
+			d, err := channel.Channel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait , args)
+			shouldBreak := false
+			firstTimeErrHandleOnce.Do(func() {
+				firstTimeErrCh<-err
+				if err != nil {
+					shouldBreak = true
+				}
+			})
+			if shouldBreak {
+				// 退出 for 从而释放 go func
+				break
+			}
+			if err != nil {
 				debugf("consume failed, err: %v", err)
 				time.Sleep(3 * time.Second)
 				continue
 			}
+
 			for msg := range d {
 				deliveries <- msg
 			}
@@ -112,6 +129,10 @@ func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery,erro
 			}
 		}
 	}()
+	firstTimeErr :=  <-firstTimeErrCh
+	if firstTimeErr != nil {
+		return deliveries, firstTimeErr
+	}
 	return deliveries, nil
 }
 
