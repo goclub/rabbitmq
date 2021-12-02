@@ -15,7 +15,9 @@ func main () {
 	log.Printf("%+v", run())
 }
 func run () (err error) {
-	rab.Debug = true
+	rab.OnReconnect = func(message string) {
+		log.Print(message)
+	}
 	conn, err := emailMessageQueue.NewConnect() ; if err != nil {
 		return
 	}

@@ -26,20 +26,20 @@ func DialConfig(url string, config amqp.Config) (conn *ProxyConnection, err erro
 		for {
 			notifyClose, ok := <-conn.NotifyClose(make(chan *amqp.Error))
 			if !ok {
-				debug("connection closed")
+				notifyReconnect("connection closed")
 				break
 			}
-			debugf("connection closed, reason: %v", notifyClose)
+			notifyReconnectf("connection closed, reason: %v", notifyClose)
 			for {
 				// wait 1s for reconnect
 				time.Sleep(3 * time.Second)
 				conn.Connection, err = amqp.DialConfig(url, config)
 				// 成功重连则break
 				if err == nil {
-					debug("reconnect success")
+					notifyReconnect("reconnect success")
 					break
 				}
-				debugf("reconnect failed, err: %v", err)
+				notifyReconnectf("reconnect failed, err: %v", err)
 			}
 		}
 	}()
@@ -71,22 +71,22 @@ func (conn *ProxyConnection) Channel() (channel *ProxyChannel, err error){
 		for {
 			notifyClose, ok := <-channel.Channel.NotifyClose(make(chan *amqp.Error))
 			if !ok || channel.IsClosed() {
-				debug("channel closed")
+				notifyReconnect("channel closed")
 				channel.Close() // close again, ensure closed flag set when connection closed
 				break
 			}
-			debug("channel closed, reason: %v", notifyClose)
+			notifyReconnectf("channel closed, reason: %v", notifyClose)
 			for {
 				time.Sleep(3 * time.Second)
 				if conn.Connection != nil {
 					ch, err := conn.Connection.Channel()
 					if err == nil {
-						debug("channel recreate success")
+						notifyReconnect("channel recreate success")
 						channel.Channel = ch
 						break
 					}
 				}
-				debugf("channel recreate failed, err: %v", err)
+				notifyReconnectf("channel recreate failed, err: %v", err)
 			}
 		}
 	}()
@@ -100,12 +100,12 @@ func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery,erro
 	firstTimeErrCh := make(chan error)
 	go func() {
 		for {
-
 			d, err := channel.Channel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait , args)
 			shouldBreak := false
 			firstTimeErrHandleOnce.Do(func() {
 				firstTimeErrCh<-err
 				if err != nil {
+					// 第一次 consume 就失败,则通过 shouldBreak 退出
 					shouldBreak = true
 				}
 			})
@@ -114,7 +114,7 @@ func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery,erro
 				break
 			}
 			if err != nil {
-				debugf("consume failed, err: %v", err)
+				notifyReconnectf("consume failed, err: %v", err)
 				time.Sleep(3 * time.Second)
 				continue
 			}
