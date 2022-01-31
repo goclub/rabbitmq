@@ -19,7 +19,7 @@ func SendEmail(email Email, mqCh *rab.ProxyChannel) (err error) {
 		return
 	}
 	return mqCh.Publish(rab.Publish{
-		Exchange:   emailMessageQueue.Model().FanoutExchange.SendEmail.Name,
+		Exchange:   emailMessageQueue.Framework().FanoutExchange.SendEmail.Name,
 		RoutingKey: "", // fanout 不需要 key
 		Mandatory:  true, // 要确保消息能到队列（配合 Channel{}.NotifyReturn ）
 		Msg:        msg,

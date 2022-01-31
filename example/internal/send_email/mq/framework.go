@@ -5,7 +5,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-func Model() (m struct {
+func Framework() (m struct {
 	FanoutExchange struct{
 		SendEmail rab.ExchangeDeclare
 	}
@@ -36,13 +36,13 @@ func NewConnect() (conn *rab.ProxyConnection, err error) {
 }
 
 func InitDeclareAndBind(mqCh *rab.ProxyChannel) (err error) {
-	err = mqCh.ExchangeDeclare(Model().FanoutExchange.SendEmail) ; if err != nil {
+	err = mqCh.ExchangeDeclare(Framework().FanoutExchange.SendEmail) ; if err != nil {
 		return
 	}
-	_, err = mqCh.QueueDeclare(Model().Queue.SendEmail) ; if err != nil {
+	_, err = mqCh.QueueDeclare(Framework().Queue.SendEmail) ; if err != nil {
 		return
 	}
-	err = mqCh.QueueBind(Model().Queue.SendEmailBind) ; if err != nil {
+	err = mqCh.QueueBind(Framework().Queue.SendEmailBind) ; if err != nil {
 		return
 	}
 	return

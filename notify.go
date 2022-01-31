@@ -5,14 +5,23 @@ import (
 	"log"
 )
 
-var OnReconnect  = func(message string) {
-	log.Print(message)
+var reconnectCallback []func(message string)
+var OnReconnect  = func(callback func (message string)) {
+	reconnectCallback = append(reconnectCallback, callback)
+}
+func reconnectNotify(message string) {
+	if len(reconnectCallback) == 0 {
+		log.Print(message)
+	}
+	for _, cb := range reconnectCallback {
+		cb(message)
+	}
 }
 
 func notifyReconnect(message string) {
-	OnReconnect("goclub/rab:" + message)
+	reconnectNotify("goclub/rab:" + message)
 }
 
 func notifyReconnectf(format string, args ...interface{}) {
-	OnReconnect("goclub/rab:" + fmt.Sprintf(format, args))
+	reconnectNotify("goclub/rab:" + fmt.Sprintf(format, args...))
 }

@@ -8,9 +8,9 @@ import (
 )
 
 func main () {
-	rab.OnReconnect = func(message string) {
+	rab.OnReconnect(func(message string) {
 		log.Print(message)
-	}
+	})
 	conn, err := emailMessageQueue.NewConnect() ; if err != nil {
 		panic(err)
 	}

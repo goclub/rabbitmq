@@ -109,6 +109,7 @@ func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery,erro
 					shouldBreak = true
 				}
 			})
+
 			if shouldBreak {
 				// 退出 for 从而释放 go func
 				break
