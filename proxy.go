@@ -1,8 +1,8 @@
 package rab
 
 import (
+	xerr "github.com/goclub/error"
 	"github.com/streadway/amqp"
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -68,6 +68,23 @@ func (conn *ProxyConnection) Channel() (channel *ProxyChannel, err error){
 	    return
 	}
 	channel.Channel = amqpCh
+	mqNotifyReturnCh := make(chan amqp.Return, 1)
+	channel.NotifyReturn(mqNotifyReturnCh)
+	go func() {
+		defer func() {
+			r := recover()
+			if r != nil {
+				for _, handle := range notifyReturnQeueue {
+					handle.Panic(r)
+				}
+			}
+		}()
+		for r := range mqNotifyReturnCh {
+			for _, handle := range notifyReturnQeueue {
+				handle.Return(&r)
+			}
+		}
+	}()
 	go func() {
 		for {
 			notifyClose, ok := <-channel.Channel.NotifyClose(make(chan *amqp.Error))
@@ -164,24 +181,18 @@ func (channel *ProxyChannel)  QueueBind(queueBind QueueBind) ( err error) {
 // 	}
 // 	log.Print(string(data))
 // }, nil)
-func NotifyReturn(channel *ProxyChannel, returnHandle func(r *amqp.Return), panicHandle func(panicRecover interface{})) {
-	mqNotifyReturnCh := make(chan amqp.Return, 1)
-	channel.NotifyReturn(mqNotifyReturnCh)
-	if panicHandle == nil {
-		// default panicHandle
-		panicHandle = func(panicRecover interface{}) {
-			log.Print(panicRecover)
-		}
+var notifyReturnQeueue []HandleNotifyReturn
+type HandleNotifyReturn struct {
+	Return func(r *amqp.Return)
+	Panic func(panicRecover interface{})
+}
+func NotifyReturn(handle HandleNotifyReturn) (err error) {
+	if handle.Return == nil {
+		return xerr.New("rab.NotifyReturn(handle) handle.Return can not be nil")
 	}
-	go func() {
-		defer func() {
-			r := recover()
-			if r != nil {
-				panicHandle(r)
-			}
-		}()
-		for r := range mqNotifyReturnCh {
-			returnHandle(&r)
-		}
-	}()
+	if handle.Panic == nil {
+		return xerr.New("rab.NotifyReturn(handle) handle.Panic can not be nil")
+	}
+	notifyReturnQeueue = append(notifyReturnQeueue, handle)
+	return
 }

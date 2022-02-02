@@ -3,6 +3,7 @@ package rab
 import (
 	"fmt"
 	"log"
+	"runtime/debug"
 )
 
 var reconnectCallback []func(message string)
@@ -14,7 +15,7 @@ func reconnectNotify(message string) {
 		log.Print(message)
 	}
 	for _, cb := range reconnectCallback {
-		cb(message)
+		cb(message + "\n" + string(debug.Stack()))
 	}
 }
 
