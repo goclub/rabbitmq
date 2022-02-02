@@ -2,7 +2,6 @@ package rab
 
 import (
 	"context"
-	"fmt"
 	xerr "github.com/goclub/error"
 	xsync "github.com/goclub/sync"
 	"github.com/streadway/amqp"
@@ -41,19 +40,17 @@ func (h HandleDelivery) Do(ctx context.Context) (err error) {
 	if h.RequeueMiddleware == nil {
 		return xerr.New("goclub/rabbitmq: HandleDelivery{}.Do() RequeueFilter can not be nil")
 	}
-	resultCh := make(chan DeliveryResult)
-	errRecoverCh := xsync.Go(func() (err error) {
+	resultCh := make(chan DeliveryResult, 1)
+	errCh := xsync.Go(func() (err error) {
 		resultCh <- h.Handle(h.Delivery)
 		return nil
 	})
 	select {
-		case  errRecover := <- errRecoverCh:
-			if errRecover.Err != nil {
-				return errRecover.Err
-			}
-			if errRecover.Recover != nil {
-				return xerr.New(fmt.Sprintf("%v", errRecover.Recover))
-			}
+		case <-ctx.Done():
+			err = ctx.Err()
+		return err
+		case  err = <- errCh:
+			return err
 		case result := <- resultCh:
 			if result.ack {
 				return h.Delivery.Ack(false)
@@ -69,9 +66,6 @@ func (h HandleDelivery) Do(ctx context.Context) (err error) {
 					return result.err
 				}
 			}
-		case <-ctx.Done():
-			err = ctx.                                                                                                                                                                                                                                                                                                          Err()
-		return err
 	}
 	return
 }

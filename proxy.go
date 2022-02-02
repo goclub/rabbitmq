@@ -2,6 +2,7 @@ package rab
 
 import (
 	"github.com/streadway/amqp"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -153,4 +154,34 @@ func (channel *ProxyChannel)  QueueDeclare(queueDeclare QueueDeclare) (queue amq
 func (channel *ProxyChannel)  QueueBind(queueBind QueueBind) ( err error) {
 	name, key, exchange, noWait, args := queueBind.Flat()
 	return channel.Channel.QueueBind(name, key, exchange, noWait, args)
+}
+
+// NotifyReturn example:
+// rab.NotifyReturn(mqch, func(r *amqp.Return) {
+// 	data, err := xjson.Marshal(r) ; if err != nil {
+// 		log.Printf("%+v", err)
+// 		return
+// 	}
+// 	log.Print(string(data))
+// }, nil)
+func NotifyReturn(channel *ProxyChannel, returnHandle func(r *amqp.Return), panicHandle func(panicRecover interface{})) {
+	mqNotifyReturnCh := make(chan amqp.Return, 1)
+	channel.NotifyReturn(mqNotifyReturnCh)
+	if panicHandle == nil {
+		// default panicHandle
+		panicHandle = func(panicRecover interface{}) {
+			log.Print(panicRecover)
+		}
+	}
+	go func() {
+		defer func() {
+			r := recover()
+			if r != nil {
+				panicHandle(r)
+			}
+		}()
+		for r := range mqNotifyReturnCh {
+			returnHandle(&r)
+		}
+	}()
 }

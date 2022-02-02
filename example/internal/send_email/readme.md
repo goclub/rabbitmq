@@ -44,20 +44,18 @@
 
 ```shell
 # 定义队列交换机（采取集中管理交换机和队列的方式）
-go run cmd/migrate/main.go
+go run migrate/main.go
 # 启动消费端
-go run cmd/consume/main.go
+go run consume/main.go
 # 发布消息（在新的终端窗口运行）
-go run cmd/send/main.go
+go run send/main.go
 ```
 
-可多次运行 `go run cmd/send/main.go` 观察消费情况。
+可多次运行 `go run send/main.go` 观察消费情况。
 
 反复重启关闭消费端，观察消费端离线时消息发送情况，和消费端重新上线后消息消费情况。
 
-[service/send.go](service/send.go) 中发布消息时配置了`Mandatory` ,在 [cmd/send/main.go](cmd/send/main.go) 中配置了  `mqCh.NotifyReturn`。
+你可以运行 `go run unbind/main.go` 解绑队列后在运行 `go run send/main.go` 观察 `rab.NotifyReturn` 运行结果。
 
-你可以运行 `go run cmd/unbind/main.go` 解绑队列后在运行 `go run cmd/send/main.go` 观察 NotifyReturn 运行结果。
-
-> 想恢复绑定则再次运行 `go run cmd/migrate/main.go` 即可
+> 想恢复绑定则再次运行 `go run migrate/main.go` 即可
 
