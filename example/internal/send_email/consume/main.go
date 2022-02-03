@@ -47,7 +47,7 @@ func ConsumeSendEmail(mqCh *rab.ProxyChannel) (err error) {
 			Handle: func(d *amqp.Delivery) rab.DeliveryResult {
 				var msg emailMessageQueue.SendEmailMessage
 				log.Print("received message")
-				err := msg.Decode(d.Body) ; if err != nil {
+				err := msg.DecodeDelivery(d) ; if err != nil {
 					// 不重新入队,因为 json decode 失败即使重新入队再次消费还是会错误
 					return rab.Reject(err, false)
 				}
