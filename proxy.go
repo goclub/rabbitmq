@@ -183,7 +183,9 @@ func (channel *ProxyChannel)  QueueBind(queueBind QueueBind) ( err error) {
 // }, nil)
 var notifyReturnQeueue []HandleNotifyReturn
 type HandleNotifyReturn struct {
+	// 发生 NotifyReturn 时触发
 	Return func(r *amqp.Return)
+	// 当 Return panic时触发 Panic
 	Panic func(panicRecover interface{})
 }
 func NotifyReturn(handle HandleNotifyReturn) (err error) {
