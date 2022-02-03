@@ -156,10 +156,10 @@ func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery,erro
 }
 
 func (channel *ProxyChannel) Publish(publish Publish) (err error) {
-	exchange, key, mandatory,immediate, msg := publish.Flat()
 	if publish.Msg.MessageId == "" {
 		publish.Msg.MessageId = MessageID()
 	}
+	exchange, key, mandatory,immediate, msg := publish.Flat()
 	return channel.Channel.Publish(exchange, key, mandatory,immediate, msg)
 }
 
