@@ -2,6 +2,7 @@ package rab
 
 import (
 	"context"
+	"fmt"
 	xerr "github.com/goclub/error"
 	xsync "github.com/goclub/sync"
 	"github.com/streadway/amqp"
@@ -12,6 +13,17 @@ type DeliveryResult struct {
 	ack bool
 	requeue bool
 	err error
+}
+// 给 DeliveryResult 增加 Error 接口是为了避出现类似 rab.Ack() 或者 rab.Reject() 前面没有 return 的错误
+func (result DeliveryResult) Error() string {
+	if result.err != nil {
+		return result.err.Error()
+	}
+	if result.ack {
+		return "goclub/rabbitmq: ack"
+	} else {
+		return fmt.Sprintf("goclub/rabbitmq: reject requeue: %v", result.requeue)
+	}
 }
 func Ack () DeliveryResult {
 	return DeliveryResult{

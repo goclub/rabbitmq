@@ -41,7 +41,7 @@ func ConsumeSendEmail(mqCh *rab.ProxyChannel) (err error) {
 		err := rab.ConsumeDelivery{
 			Delivery: d,
 			// 通过 重新入队中间件控制同一个消费只重复入队3次,避免一些无法被消费的消息反复消费
-			RequeueMiddleware: func(d amqp.Delivery) (requeue bool) {
+			RequeueMiddleware: func(d *amqp.Delivery) (requeue bool) {
 				return true
 			},
 			Handle: func(d *amqp.Delivery) rab.DeliveryResult {
