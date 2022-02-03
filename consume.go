@@ -30,7 +30,7 @@ func Reject (err error, requeue bool) DeliveryResult {
 }
 type ConsumeDelivery struct {
 	Delivery amqp.Delivery
-	RequeueMiddleware func (d amqp.Delivery) (requeue bool)
+	RequeueMiddleware func (d *amqp.Delivery) (requeue bool)
 	Handle func(d *amqp.Delivery) DeliveryResult
 }
 func (h ConsumeDelivery) Do(ctx context.Context) (err error) {
@@ -57,7 +57,7 @@ func (h ConsumeDelivery) Do(ctx context.Context) (err error) {
 			} else {
 				requeue := result.requeue
 				if requeue {
-					requeue = h.RequeueMiddleware(h.Delivery)
+					requeue = h.RequeueMiddleware(&h.Delivery)
 				}
 				err = h.Delivery.Reject(requeue) ; if err != nil {
 				    return
