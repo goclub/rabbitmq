@@ -38,13 +38,13 @@ func ConsumeSendEmail(mqCh *rab.ProxyChannel) (err error) {
 		handleCtx, cancel := context.WithTimeout(ctx, time.Second* 2)
 		defer cancel()
 		// 使用 rab.HandleDelivery 可以简化消费.避免"堵塞"
-		err := rab.HandleDelivery{
+		err := rab.ConsumeDelivery{
 			Delivery: d,
 			// 通过 重新入队中间件控制同一个消费只重复入队3次,避免一些无法被消费的消息反复消费
 			RequeueMiddleware: func(d amqp.Delivery) (requeue bool) {
 				return true
 			},
-			Handle: func(d amqp.Delivery) rab.DeliveryResult {
+			Handle: func(d *amqp.Delivery) rab.DeliveryResult {
 				var msg emailMessageQueue.SendEmailMessage
 				log.Print("received message")
 				err := msg.Decode(d.Body) ; if err != nil {
