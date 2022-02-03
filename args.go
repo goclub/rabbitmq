@@ -115,7 +115,8 @@ type Publish struct {
 	RoutingKey RoutingKey
 	Mandatory bool // mandatory参数告诉服务器至少将该消息路由到一个队列中，否则将消息返回给生产者。
 	Msg amqp.Publishing
-	Immediate bool // RabbitMQ 3.0版本开始去掉了对immediate参数的支持， immediate参数告诉服务器，如果该消息关联的队列上有消费者，则立刻投递；如果所有匹配的队列上都没有消费者，则直接将消息返还给生产者，不用将消息存入队列而等待消费者了。
+	// Deprecated: RabbitMQ 3.0版本开始去掉了对immediate参数的支持， immediate参数告诉服务器，如果该消息关联的队列上有消费者，则立刻投递；如果所有匹配的队列上都没有消费者，则直接将消息返还给生产者，不用将消息存入队列而等待消费者了。
+	Immediate bool
 }
 func (v Publish) Flat() (exchange, key string, mandatory, immediate bool, msg amqp.Publishing) {
 	return v.Exchange.String(), v.RoutingKey.String(), v.Mandatory, v.Immediate, v.Msg
