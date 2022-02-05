@@ -43,7 +43,7 @@ func Reject (err error, requeue bool) DeliveryResult {
 type ConsumeDelivery struct {
 	Delivery amqp.Delivery
 	RequeueMiddleware func (d *amqp.Delivery) (requeue bool)
-	Handle func(d *amqp.Delivery) DeliveryResult
+	Handle func(ctx context.Context, d *amqp.Delivery) DeliveryResult
 }
 func (h ConsumeDelivery) Do(ctx context.Context) (err error) {
 	if h.Handle == nil {
@@ -54,7 +54,7 @@ func (h ConsumeDelivery) Do(ctx context.Context) (err error) {
 	}
 	resultCh := make(chan DeliveryResult, 1)
 	errCh := xsync.Go(func() (err error) {
-		resultCh <- h.Handle(&h.Delivery)
+		resultCh <- h.Handle(ctx, &h.Delivery)
 		return nil
 	})
 	select {

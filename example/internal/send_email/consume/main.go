@@ -44,7 +44,7 @@ func ConsumeSendEmail(mqCh *rab.ProxyChannel) (err error) {
 			RequeueMiddleware: func(d *amqp.Delivery) (requeue bool) {
 				return true
 			},
-			Handle: func(d *amqp.Delivery) rab.DeliveryResult {
+			Handle: func(ctx context.Context, d *amqp.Delivery) rab.DeliveryResult {
 				var msg emailMessageQueue.SendEmailMessage
 				log.Print("received message")
 				err := msg.DecodeDelivery(d) ; if err != nil {
