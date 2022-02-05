@@ -154,10 +154,13 @@ func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery,erro
 	}
 	return deliveries, nil
 }
-
+// Publish 自动添加 MessageId 和 Timestamp
 func (channel *ProxyChannel) Publish(publish Publish) (err error) {
-	if publish.Msg.MessageId == "" {
+	if publish.Msg.MessageId =="" {
 		publish.Msg.MessageId = MessageID()
+	}
+	if publish.Msg.Timestamp.IsZero() {
+		publish.Msg.Timestamp = time.Now()
 	}
 	exchange, key, mandatory,immediate, msg := publish.Flat()
 	return channel.Channel.Publish(exchange, key, mandatory,immediate, msg)
