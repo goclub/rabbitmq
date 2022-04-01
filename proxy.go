@@ -62,12 +62,19 @@ func (ch *ProxyChannel) Close() error {
 	atomic.StoreInt32(&ch.closed, 1)
 	return ch.Channel.Close()
 }
-func (conn *ProxyConnection) Channel() (channel *ProxyChannel, err error){
+func (conn *ProxyConnection) Channel() (channel *ProxyChannel, channelClose func() error, err error){
+	// 防止调用 nil
+	channelClose = func() error {
+		return nil
+	}
+
 	channel = &ProxyChannel{}
 	amqpCh, err := conn.Connection.Channel() ; if err != nil {
+		err = xerr.WithStack(err)
 	    return
 	}
 	channel.Channel = amqpCh
+	channelClose = channel.Close
 	mqNotifyReturnCh := make(chan amqp.Return, 1)
 	channel.NotifyReturn(mqNotifyReturnCh)
 	go func() {
@@ -121,7 +128,7 @@ func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery,erro
 			d, err := channel.Channel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait , args)
 			shouldBreak := false
 			firstTimeErrHandleOnce.Do(func() {
-				firstTimeErrCh<-err
+				firstTimeErrCh<-xerr.WithStack(err)
 				if err != nil {
 					// 第一次 consume 就失败,则通过 shouldBreak 退出
 					shouldBreak = true

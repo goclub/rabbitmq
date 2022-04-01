@@ -11,9 +11,10 @@ func main() {
 	conn, err := rab.Dial("amqp://guest:guest@localhost:5672/") ; if err != nil {
 		panic(err)
 	}
-	mqCh, err := conn.Channel() ; if err != nil {
+	mqCh,mqChClose, err := conn.Channel() ; if err != nil {
 		panic(err)
 	}
+	defer mqChClose()
 	// 声明死信交换机
 	err = mqCh.ExchangeDeclare(rab.ExchangeDeclare{
 		Name: "dlx_example_time",

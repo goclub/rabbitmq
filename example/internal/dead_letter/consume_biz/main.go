@@ -10,9 +10,10 @@ func main() {
 	conn, err := rab.Dial("amqp://guest:guest@localhost:5672/") ; if err != nil {
 		panic(err)
 	}
-	mqCh, err := conn.Channel() ; if err != nil {
+	mqCh,mqChClose, err := conn.Channel() ; if err != nil {
 		panic(err)
 	}
+	defer mqChClose()
 	// 消费业务消息
 	msgs, err := mqCh.Consume(rab.Consume{
 		Queue: rab.QueueName("q_example_time"),

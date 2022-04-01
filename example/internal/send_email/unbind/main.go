@@ -12,9 +12,10 @@ func main() {
 	conn, err := emailMessageQueue.NewConnect() ; if err != nil {
 		panic(err)
 	}
-	mqCh, err := conn.Channel() ; if err != nil {
+	mqCh, mqChClose, err := conn.Channel() ; if err != nil {
 		panic(err)
 	}
+	defer mqChClose()
 	err = mqCh.QueueUnbind(rab.QueueUnbind{
 		Queue:      emailMessageQueue.Framework().Queue.SendEmail.Name,
 		RoutingKey: "",

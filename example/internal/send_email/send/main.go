@@ -28,9 +28,10 @@ func run () (err error) {
 	conn, err := emailMessageQueue.NewConnect() ; if err != nil {
 		return
 	}
-	mqCh, err := conn.Channel() ; if err != nil {
+	mqCh,mqChClose, err := conn.Channel() ; if err != nil {
 		return
 	}
+	defer mqChClose()
 	log.Print("start mesasge done")
 	for {
 		err = SendEmail(Email{
