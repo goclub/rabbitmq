@@ -10,10 +10,11 @@ import (
 
 // DeliveryResult create with rab.Ack() or rab.Reject()
 type DeliveryResult struct {
-	ack bool
+	ack     bool
 	requeue bool
-	err error
+	err     error
 }
+
 // 给 DeliveryResult 增加 Error 接口是为了避出现类似 rab.Ack() 或者 rab.Reject() 前面没有 return 的错误
 func (result DeliveryResult) Error() string {
 	if result.err != nil {
@@ -25,26 +26,28 @@ func (result DeliveryResult) Error() string {
 		return fmt.Sprintf("goclub/rabbitmq: reject requeue: %v", result.requeue)
 	}
 }
-func Ack () DeliveryResult {
+func Ack() DeliveryResult {
 	return DeliveryResult{
-		ack: true,
+		ack:     true,
 		requeue: false,
-		err: nil,
+		err:     nil,
 	}
 }
 
-func Reject (err error, requeue bool) DeliveryResult {
+func Reject(err error, requeue bool) DeliveryResult {
 	return DeliveryResult{
-		ack: false,
+		ack:     false,
 		requeue: requeue,
-		err: nil,
+		err:     nil,
 	}
 }
+
 type ConsumeDelivery struct {
-	Delivery amqp.Delivery
-	RequeueMiddleware func (d *amqp.Delivery) (requeue bool)
-	Handle func(ctx context.Context, d *amqp.Delivery) DeliveryResult
+	Delivery          amqp.Delivery
+	RequeueMiddleware func(d *amqp.Delivery) (requeue bool)
+	Handle            func(ctx context.Context, d *amqp.Delivery) DeliveryResult
 }
+
 func (h ConsumeDelivery) Do(ctx context.Context) (err error) {
 	if h.Handle == nil {
 		return xerr.New("goclub/rabbitmq: HandleDelivery{}.Do() Handle can not be nil")
@@ -53,31 +56,35 @@ func (h ConsumeDelivery) Do(ctx context.Context) (err error) {
 		return xerr.New("goclub/rabbitmq: HandleDelivery{}.Do() RequeueFilter can not be nil")
 	}
 	resultCh := make(chan DeliveryResult, 1)
-	errCh := xsync.Go(func() (err error) {
+	errCh, err := xsync.Go(func() (err error) {
 		resultCh <- h.Handle(ctx, &h.Delivery)
 		return nil
 	})
+	if err != nil {
+		return
+	}
 	select {
-		case <-ctx.Done():
-			err = ctx.Err()
+	case <-ctx.Done():
+		err = ctx.Err()
 		return err
-		case  err = <- errCh:
-			return err
-		case result := <- resultCh:
-			if result.ack {
-				return h.Delivery.Ack(false)
-			} else {
-				requeue := result.requeue
-				if requeue {
-					requeue = h.RequeueMiddleware(&h.Delivery)
-				}
-				err = h.Delivery.Reject(requeue) ; if err != nil {
-				    return
-				}
-				if result.err != nil {
-					return result.err
-				}
+	case err = <-errCh:
+		return err
+	case result := <-resultCh:
+		if result.ack {
+			return h.Delivery.Ack(false)
+		} else {
+			requeue := result.requeue
+			if requeue {
+				requeue = h.RequeueMiddleware(&h.Delivery)
 			}
+			err = h.Delivery.Reject(requeue)
+			if err != nil {
+				return
+			}
+			if result.err != nil {
+				return result.err
+			}
+		}
 	}
 	return
 }
