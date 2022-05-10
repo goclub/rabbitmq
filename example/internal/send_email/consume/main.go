@@ -10,19 +10,19 @@ import (
 	"time"
 )
 
-func main () {
-	rab.OnReconnect(func(message string) {
-		log.Print(message)
-	})
-	conn, err := emailMessageQueue.NewConnect() ; if err != nil {
+func main() {
+	conn, err := emailMessageQueue.NewConnect()
+	if err != nil {
 		panic(err)
 	}
-	mqCh, mqChClose, err := conn.Channel() ; if err != nil {
+	mqCh, mqChClose, err := conn.Channel()
+	if err != nil {
 		panic(err)
 	}
 	defer mqChClose()
 	log.Print("start consume queue")
-	err = ConsumeSendEmail(mqCh) ; if err != nil {
+	err = ConsumeSendEmail(mqCh)
+	if err != nil {
 		panic(err)
 	}
 }
@@ -30,12 +30,13 @@ func ConsumeSendEmail(mqCh *rab.ProxyChannel) (err error) {
 	ctx := context.Background()
 	msgs, err := mqCh.Consume(rab.Consume{
 		Queue: emailMessageQueue.Framework().Queue.SendEmail.Name,
-	}) ; if err != nil {
+	})
+	if err != nil {
 		return
 	}
 	for d := range msgs {
 		// 设置 timeout 防止意外"堵塞"导致消费者一直在消费某个消息,注意即使当发送超时并返回了超时错误. Handle 可能还是会执行
-		handleCtx, cancel := context.WithTimeout(ctx, time.Second* 2)
+		handleCtx, cancel := context.WithTimeout(ctx, time.Second*2)
 		defer cancel()
 		// 使用 rab.HandleDelivery 可以简化消费.避免"堵塞"
 		err := rab.ConsumeDelivery{
@@ -47,7 +48,8 @@ func ConsumeSendEmail(mqCh *rab.ProxyChannel) (err error) {
 			Handle: func(ctx context.Context, d *amqp.Delivery) rab.DeliveryResult {
 				var msg emailMessageQueue.SendEmailMessage
 				log.Print("received message")
-				err := msg.DecodeDelivery(d) ; if err != nil {
+				err := msg.DecodeDelivery(d)
+				if err != nil {
 					// 不重新入队,因为 json decode 失败即使重新入队再次消费还是会错误
 					return rab.Reject(err, false)
 				}
@@ -55,7 +57,8 @@ func ConsumeSendEmail(mqCh *rab.ProxyChannel) (err error) {
 				// 消费完成后应答消息处理完成
 				return rab.Ack()
 			},
-		}.Do(handleCtx) ; if err != nil {
+		}.Do(handleCtx)
+		if err != nil {
 			// 消息队列的消费者不同于 http/rpc 等接口,当出现错误时不能直接退出,退出会导致无消费者消费消息
 			// 应当将错误记录到类似 sentry 的错误追踪平台
 			xerr.PrintStack(err)
@@ -63,4 +66,3 @@ func ConsumeSendEmail(mqCh *rab.ProxyChannel) (err error) {
 	}
 	return nil
 }
-

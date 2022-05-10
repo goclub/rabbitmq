@@ -1,6 +1,7 @@
 package rab
 
 import (
+	"fmt"
 	xerr "github.com/goclub/error"
 	"github.com/streadway/amqp"
 	"sync"
@@ -11,36 +12,44 @@ import (
 // 参考 https://github.com/isayme/go-amqp-reconnect/blob/master/rabbitmq/rabbitmq.go
 type ProxyConnection struct {
 	*amqp.Connection
+	opt Option
 }
-func Dial(url string) (conn *ProxyConnection, err error) {
+
+func Dial(url string, opt Option) (conn *ProxyConnection, err error) {
 	return DialConfig(url, amqp.Config{
 		Heartbeat: 2 * time.Second,
-		Locale: "en_US",
-	})
+		Locale:    "en_US",
+	}, opt)
 }
-func DialConfig(url string, config amqp.Config) (conn *ProxyConnection, err error) {
-	conn = &ProxyConnection{}
-	conn.Connection, err = amqp.DialConfig(url, config) ; if err != nil {
-	    return
+func DialConfig(url string, config amqp.Config, opt Option) (conn *ProxyConnection, err error) {
+	err = opt.init()
+	if err != nil {
+		return
+	}
+	conn = &ProxyConnection{
+		opt: opt,
+	}
+	conn.Connection, err = amqp.DialConfig(url, config)
+	if err != nil {
+		return
 	}
 	go func() {
 		for {
 			notifyClose, ok := <-conn.NotifyClose(make(chan *amqp.Error))
 			if !ok {
-				notifyReconnect("connection closed")
+				conn.opt.OnReconnect("connection closed")
 				break
 			}
-			notifyReconnectf("connection closed, reason: %v", notifyClose)
+			conn.opt.OnReconnect(fmt.Sprintf("connection closed, reason: %v", notifyClose))
 			for {
-				// wait 1s for reconnect
-				time.Sleep(3 * time.Second)
+				time.Sleep(time.Second)
 				conn.Connection, err = amqp.DialConfig(url, config)
 				// 成功重连则break
 				if err == nil {
-					notifyReconnect("reconnect success")
+					conn.opt.OnReconnect("reconnect success")
 					break
 				}
-				notifyReconnectf("reconnect failed, err: %v", err)
+				conn.opt.OnReconnect(fmt.Sprintf("reconnect failed, err: %v", err))
 			}
 		}
 	}()
@@ -50,10 +59,13 @@ func DialConfig(url string, config amqp.Config) (conn *ProxyConnection, err erro
 type ProxyChannel struct {
 	*amqp.Channel
 	closed int32
+	opt    Option
 }
+
 func (ch *ProxyChannel) IsClosed() bool {
 	return atomic.LoadInt32(&ch.closed) == 1
 }
+
 // 利用继承代理 Close获取用户主动调用的close
 func (ch *ProxyChannel) Close() error {
 	if ch.IsClosed() {
@@ -62,16 +74,19 @@ func (ch *ProxyChannel) Close() error {
 	atomic.StoreInt32(&ch.closed, 1)
 	return ch.Channel.Close()
 }
-func (conn *ProxyConnection) Channel() (channel *ProxyChannel, channelClose func() error, err error){
+func (conn *ProxyConnection) Channel() (channel *ProxyChannel, channelClose func() error, err error) {
 	// 防止调用 nil
 	channelClose = func() error {
 		return nil
 	}
 
-	channel = &ProxyChannel{}
-	amqpCh, err := conn.Connection.Channel() ; if err != nil {
+	channel = &ProxyChannel{
+		opt: conn.opt,
+	}
+	amqpCh, err := conn.Connection.Channel()
+	if err != nil {
 		err = xerr.WithStack(err)
-	    return
+		return
 	}
 	channel.Channel = amqpCh
 	channelClose = channel.Close
@@ -81,54 +96,50 @@ func (conn *ProxyConnection) Channel() (channel *ProxyChannel, channelClose func
 		defer func() {
 			r := recover()
 			if r != nil {
-				for _, handle := range notifyReturnQeueue {
-					handle.Panic(r)
-				}
+				conn.opt.HandleNotifyReturn.Panic(r)
 			}
 		}()
 		for r := range mqNotifyReturnCh {
-			for _, handle := range notifyReturnQeueue {
-				handle.Return(&r)
-			}
+			conn.opt.HandleNotifyReturn.Return(&r)
 		}
 	}()
 	go func() {
 		for {
 			notifyClose, ok := <-channel.Channel.NotifyClose(make(chan *amqp.Error))
 			if !ok || channel.IsClosed() {
-				notifyReconnect("channel closed")
+				conn.opt.OnReconnect("channel closed")
 				channel.Close() // close again, ensure closed flag set when connection closed
 				break
 			}
-			notifyReconnectf("channel closed, reason: %v", notifyClose)
+			conn.opt.OnReconnect(fmt.Sprintf("channel closed, reason: %v", notifyClose))
 			for {
-				time.Sleep(3 * time.Second)
+				time.Sleep(time.Second)
 				if conn.Connection != nil {
 					ch, err := conn.Connection.Channel()
 					if err == nil {
-						notifyReconnect("channel recreate success")
+						conn.opt.OnReconnect("channel recreate success")
 						channel.Channel = ch
 						break
 					}
 				}
-				notifyReconnectf("channel recreate failed, err: %v", err)
+				conn.opt.OnReconnect(fmt.Sprintf("channel recreate failed, err: %v", err))
 			}
 		}
 	}()
 	return
 }
 
-func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery,error) {
+func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery, error) {
 	deliveries := make(chan amqp.Delivery)
-	queue, consumer, autoAck, exclusive, noLocal, noWait , args := consume.Flat()
+	queue, consumer, autoAck, exclusive, noLocal, noWait, args := consume.Flat()
 	firstTimeErrHandleOnce := sync.Once{}
 	firstTimeErrCh := make(chan error)
 	go func() {
 		for {
-			d, err := channel.Channel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait , args)
+			d, err := channel.Channel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait, args)
 			shouldBreak := false
 			firstTimeErrHandleOnce.Do(func() {
-				firstTimeErrCh<-xerr.WithStack(err)
+				firstTimeErrCh <- xerr.WithStack(err)
 				if err != nil {
 					// 第一次 consume 就失败,则通过 shouldBreak 退出
 					shouldBreak = true
@@ -140,8 +151,8 @@ func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery,erro
 				break
 			}
 			if err != nil {
-				notifyReconnectf("consume failed, err: %v", err)
-				time.Sleep(3 * time.Second)
+				channel.opt.OnReconnect(fmt.Sprintf("consume failed, err: %v", err))
+				time.Sleep(time.Second)
 				continue
 			}
 
@@ -149,65 +160,40 @@ func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery,erro
 				deliveries <- msg
 			}
 			// sleep before IsClose call. closed flag may not set before sleep.
-			time.Sleep(3 * time.Second)
+			time.Sleep(time.Second)
 			if channel.IsClosed() {
 				break
 			}
 		}
 	}()
-	firstTimeErr :=  <-firstTimeErrCh
+	firstTimeErr := <-firstTimeErrCh
 	if firstTimeErr != nil {
 		return deliveries, firstTimeErr
 	}
 	return deliveries, nil
 }
+
 // Publish 自动添加 MessageId 和 Timestamp
 func (channel *ProxyChannel) Publish(publish Publish) (err error) {
-	if publish.Msg.MessageId =="" {
+	if publish.Msg.MessageId == "" {
 		publish.Msg.MessageId = MessageID()
 	}
 	if publish.Msg.Timestamp.IsZero() {
 		publish.Msg.Timestamp = time.Now()
 	}
-	exchange, key, mandatory,immediate, msg := publish.Flat()
-	return channel.Channel.Publish(exchange, key, mandatory,immediate, msg)
+	exchange, key, mandatory, immediate, msg := publish.Flat()
+	return channel.Channel.Publish(exchange, key, mandatory, immediate, msg)
 }
 
-func (channel *ProxyChannel)  ExchangeDeclare(declare ExchangeDeclare) (err error) {
-	name, kind , durable, autoDelete, internal, noWait, args := declare.Flat()
-	return channel.Channel.ExchangeDeclare(name, kind , durable, autoDelete, internal, noWait, args)
+func (channel *ProxyChannel) ExchangeDeclare(declare ExchangeDeclare) (err error) {
+	name, kind, durable, autoDelete, internal, noWait, args := declare.Flat()
+	return channel.Channel.ExchangeDeclare(name, kind, durable, autoDelete, internal, noWait, args)
 }
-func (channel *ProxyChannel)  QueueDeclare(queueDeclare QueueDeclare) (queue amqp.Queue, err error) {
-	name, durable, autoDelete, exclusive, noWait , args := queueDeclare.Flat()
-	return channel.Channel.QueueDeclare(name, durable, autoDelete, exclusive, noWait , args)
+func (channel *ProxyChannel) QueueDeclare(queueDeclare QueueDeclare) (queue amqp.Queue, err error) {
+	name, durable, autoDelete, exclusive, noWait, args := queueDeclare.Flat()
+	return channel.Channel.QueueDeclare(name, durable, autoDelete, exclusive, noWait, args)
 }
-func (channel *ProxyChannel)  QueueBind(queueBind QueueBind) ( err error) {
+func (channel *ProxyChannel) QueueBind(queueBind QueueBind) (err error) {
 	name, key, exchange, noWait, args := queueBind.Flat()
 	return channel.Channel.QueueBind(name, key, exchange, noWait, args)
-}
-
-// NotifyReturn example:
-// rab.NotifyReturn(mqch, func(r *amqp.Return) {
-// 	data, err := xjson.Marshal(r) ; if err != nil {
-// 		log.Printf("%+v", err)
-// 		return
-// 	}
-// 	log.Print(string(data))
-// }, nil)
-var notifyReturnQeueue []HandleNotifyReturn
-type HandleNotifyReturn struct {
-	// 发生 NotifyReturn 时触发
-	Return func(r *amqp.Return)
-	// 当 Return panic时触发 Panic
-	Panic func(panicRecover interface{})
-}
-func NotifyReturn(handle HandleNotifyReturn) (err error) {
-	if handle.Return == nil {
-		return xerr.New("rab.NotifyReturn(handle) handle.Return can not be nil")
-	}
-	if handle.Panic == nil {
-		return xerr.New("rab.NotifyReturn(handle) handle.Panic can not be nil")
-	}
-	notifyReturnQeueue = append(notifyReturnQeueue, handle)
-	return
 }

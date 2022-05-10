@@ -6,7 +6,12 @@ import (
 	"log"
 )
 
+type Some struct {
+	Name string
+	Fn func(i int)
+}
 func main() {
+	
 	log.Print("start migrate")
 	conn, err := rab.Dial("amqp://guest:guest@localhost:5672/") ; if err != nil {
 		panic(err)

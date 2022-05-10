@@ -1,6 +1,6 @@
 module github.com/goclub/rabbitmq
 
-go 1.15
+go 1.12
 
 require (
 	github.com/goclub/error v0.0.0-20220125134423-c85b4b6468c8
