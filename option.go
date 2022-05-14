@@ -14,12 +14,12 @@ type Option struct {
 	OnReconnect func(message string)
 	// NotifyReturn 用于订阅发送时退回的消息 需在 Publish 时配合 Mandatory 使用
 	HandleNotifyReturn HandleNotifyReturn
-	LocalMessage LocalMessageOption
+	Outbox OutboxOption
 }
-type LocalMessageOption struct {
-	MaxPublishTimes             uint16        `default:"3"`
-	MessageRetryInterval        time.Duration `default:"3s"`
-	ConsumeLoopInterval			time.Duration `default:"1s"`
+type OutboxOption struct {
+	MaxPublishTimes     uint16                       `default:"10"`
+	NextPublishTime     func(n uint16) time.Duration `default:"3s"`
+	ConsumeLoopInterval time.Duration                `default:"1s"`
 	TimeZone					*time.Location `default:"time.FixedZone("CST", 8*3600) china"`
 	Logger 						*log.Logger	   `default:"log.Default()"`
 }
@@ -47,22 +47,22 @@ func (o *Option) init() (err error) {
 			panic(panicRecover)
 		}
 	}
-	if o.LocalMessage.MaxPublishTimes == 0 {
-		o.LocalMessage.MaxPublishTimes = 3
+	if o.Outbox.MaxPublishTimes == 0 {
+		o.Outbox.MaxPublishTimes = 10
 	}
-	if o.LocalMessage.MessageRetryInterval == 0 {
-		o.LocalMessage.MessageRetryInterval = time.Second * 3
+	if o.Outbox.NextPublishTime == nil {
+		o.Outbox.NextPublishTime = func(n uint16) time.Duration {
+			return time.Duration(n) * time.Second * 3
+		}
 	}
-	if o.LocalMessage.ConsumeLoopInterval == 0 {
-		o.LocalMessage.ConsumeLoopInterval = time.Second * 1
+	if o.Outbox.ConsumeLoopInterval == 0 {
+		o.Outbox.ConsumeLoopInterval = time.Second * 1
 	}
-	if o.LocalMessage.TimeZone == nil {
-		o.LocalMessage.TimeZone = time.FixedZone("CST", 8*3600)
+	if o.Outbox.TimeZone == nil {
+		o.Outbox.TimeZone = time.FixedZone("CST", 8*3600)
 	}
-	if o.LocalMessage.Logger == nil {
-		o.LocalMessage.Logger = log.Default()
+	if o.Outbox.Logger == nil {
+		o.Outbox.Logger = log.Default()
 	}
-
-
 	return
 }

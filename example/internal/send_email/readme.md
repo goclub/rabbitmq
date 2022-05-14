@@ -43,11 +43,16 @@
 确保在 send_email 目录下后按顺序运行
 
 ```shell
-# 定义队列交换机（采取集中管理交换机和队列的方式）
+# 定义队列和交换机（采取集中管理交换机和队列的方式,你也可以提前在web界面中管理）
 go run migrate/main.go
-# 启动消费端
+
+# 启动队列消费端
 go run consume/main.go
-# 发布消息（在新的终端窗口运行）
+
+# 启动发件箱消费端
+go run outbox/main.go
+
+# 发布消息到交换机（在新的终端窗口运行）
 go run send/main.go
 ```
 
