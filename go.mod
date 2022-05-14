@@ -3,6 +3,7 @@ module github.com/goclub/rabbitmq
 go 1.12
 
 require (
+	github.com/go-sql-driver/mysql v1.6.0
 	github.com/goclub/error v0.0.0-20220125134423-c85b4b6468c8
 	github.com/goclub/json v0.0.0-20201216064424-4c200d38c18f
 	github.com/goclub/sync v0.0.0-20220222013725-8c0c4e190ec4

@@ -1,10 +1,10 @@
 package rab
 
 import (
-	xerr "github.com/goclub/error"
 	"github.com/streadway/amqp"
 	"log"
 	"runtime/debug"
+	"time"
 )
 
 type Option struct {
@@ -14,6 +14,14 @@ type Option struct {
 	OnReconnect func(message string)
 	// NotifyReturn 用于订阅发送时退回的消息 需在 Publish 时配合 Mandatory 使用
 	HandleNotifyReturn HandleNotifyReturn
+	LocalMessage LocalMessageOption
+}
+type LocalMessageOption struct {
+	MaxPublishTimes             uint16        `default:"3"`
+	MessageRetryInterval        time.Duration `default:"3s"`
+	ConsumeLoopInterval			time.Duration `default:"1s"`
+	TimeZone					*time.Location `default:"time.FixedZone("CST", 8*3600) china"`
+	Logger 						*log.Logger	   `default:"log.Default()"`
 }
 
 type HandleNotifyReturn struct {
@@ -23,21 +31,38 @@ type HandleNotifyReturn struct {
 	Panic func(panicRecover interface{})
 }
 
-func (o Option) init() (err error) {
+func (o *Option) init() (err error) {
 	if o.OnReconnect == nil {
 		o.OnReconnect = func(message string) {
 			log.Print(message, string(debug.Stack()))
 		}
 	}
 	if o.HandleNotifyReturn.Return == nil {
-		return xerr.New("rab.Dial(url , opt) opt.HandleNotifyReturn.Return can not be nil")
+		o.HandleNotifyReturn.Return = func(r *amqp.Return) {
+			log.Print("RabbitMQNotifyReturn", r.MessageId, string(r.Body))
+		}
 	}
 	if o.HandleNotifyReturn.Panic == nil {
-		return xerr.New("rab.Dial(url , opt) opt.HandleNotifyReturn.Panic can not be nil")
+		o.HandleNotifyReturn.Panic = func(panicRecover interface{}) {
+			panic(panicRecover)
+		}
 	}
-	return
-}
-func (o Option) notifyReturn() (err error) {
+	if o.LocalMessage.MaxPublishTimes == 0 {
+		o.LocalMessage.MaxPublishTimes = 3
+	}
+	if o.LocalMessage.MessageRetryInterval == 0 {
+		o.LocalMessage.MessageRetryInterval = time.Second * 3
+	}
+	if o.LocalMessage.ConsumeLoopInterval == 0 {
+		o.LocalMessage.ConsumeLoopInterval = time.Second * 1
+	}
+	if o.LocalMessage.TimeZone == nil {
+		o.LocalMessage.TimeZone = time.FixedZone("CST", 8*3600)
+	}
+	if o.LocalMessage.Logger == nil {
+		o.LocalMessage.Logger = log.Default()
+	}
+
 
 	return
 }

@@ -7,17 +7,20 @@ import (
 
 func main() {
 	log.Print("consume biz")
-	conn, err := rab.Dial("amqp://guest:guest@localhost:5672/") ; if err != nil {
+	conn, err := rab.Dial("amqp://guest:guest@localhost:5672/", rab.Option{})
+	if err != nil {
 		panic(err)
 	}
-	mqCh,mqChClose, err := conn.Channel() ; if err != nil {
+	mqCh, mqChClose, err := conn.Channel()
+	if err != nil {
 		panic(err)
 	}
 	defer mqChClose()
 	// 消费业务消息
 	msgs, err := mqCh.Consume(rab.Consume{
 		Queue: rab.QueueName("q_example_time"),
-	}) ; if err != nil {
+	})
+	if err != nil {
 		panic(err)
 	}
 	for d := range msgs {

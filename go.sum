@@ -1,5 +1,7 @@
 github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/go-sql-driver/mysql v1.6.0 h1:BCTh4TKNUYmOmMUcQ3IipzF5prigylS7XXjEkfCHuOE=
+github.com/go-sql-driver/mysql v1.6.0/go.mod h1:DCzpHaOWr8IXmIStZouvnhqoel9Qv2LBy8hT2VhHyBg=
 github.com/goclub/error v0.0.0-20220125134423-c85b4b6468c8 h1:/BrlTuQvwEUmFUM+O8ekGQVPFvFymnH/GSd3lgFR4Fk=
 github.com/goclub/error v0.0.0-20220125134423-c85b4b6468c8/go.mod h1:2ombCAL3uNuhVNevp56iOpelgiQIyxlYkz7t6nWEC18=
 github.com/goclub/json v0.0.0-20201216064424-4c200d38c18f h1:xWeyqRM/ZFaZ4iE9SXcKgozxs+VrouZI/spJUax3qzI=

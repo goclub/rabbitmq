@@ -22,6 +22,11 @@ func Dial(url string, opt Option) (conn *ProxyConnection, err error) {
 	}, opt)
 }
 func DialConfig(url string, config amqp.Config, opt Option) (conn *ProxyConnection, err error) {
+	defer func() {
+		if err != nil {
+			err = xerr.WithStack(err)
+		}
+	}()
 	err = opt.init()
 	if err != nil {
 		return
@@ -75,6 +80,11 @@ func (ch *ProxyChannel) Close() error {
 	return ch.Channel.Close()
 }
 func (conn *ProxyConnection) Channel() (channel *ProxyChannel, channelClose func() error, err error) {
+	defer func() {
+		if err != nil {
+			err = xerr.WithStack(err)
+		}
+	}()
 	// 防止调用 nil
 	channelClose = func() error {
 		return nil
@@ -85,7 +95,6 @@ func (conn *ProxyConnection) Channel() (channel *ProxyChannel, channelClose func
 	}
 	amqpCh, err := conn.Connection.Channel()
 	if err != nil {
-		err = xerr.WithStack(err)
 		return
 	}
 	channel.Channel = amqpCh
@@ -175,6 +184,11 @@ func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery, err
 
 // Publish 自动添加 MessageId 和 Timestamp
 func (channel *ProxyChannel) Publish(publish Publish) (err error) {
+	defer func() {
+		if err != nil {
+			err = xerr.WithStack(err)
+		}
+	}()
 	if publish.Msg.MessageId == "" {
 		publish.Msg.MessageId = MessageID()
 	}
@@ -186,14 +200,28 @@ func (channel *ProxyChannel) Publish(publish Publish) (err error) {
 }
 
 func (channel *ProxyChannel) ExchangeDeclare(declare ExchangeDeclare) (err error) {
+	defer func() {
+		if err != nil {
+			err = xerr.WithStack(err)
+		}
+	}()
 	name, kind, durable, autoDelete, internal, noWait, args := declare.Flat()
 	return channel.Channel.ExchangeDeclare(name, kind, durable, autoDelete, internal, noWait, args)
 }
-func (channel *ProxyChannel) QueueDeclare(queueDeclare QueueDeclare) (queue amqp.Queue, err error) {
+func (channel *ProxyChannel) QueueDeclare(queueDeclare QueueDeclare) (queue amqp.Queue, err error) {;defer func() {
+	if err != nil {
+		err = xerr.WithStack(err)
+	}
+}()
 	name, durable, autoDelete, exclusive, noWait, args := queueDeclare.Flat()
 	return channel.Channel.QueueDeclare(name, durable, autoDelete, exclusive, noWait, args)
 }
 func (channel *ProxyChannel) QueueBind(queueBind QueueBind) (err error) {
+	defer func() {
+		if err != nil {
+			err = xerr.WithStack(err)
+		}
+	}()
 	name, key, exchange, noWait, args := queueBind.Flat()
 	return channel.Channel.QueueBind(name, key, exchange, noWait, args)
 }
