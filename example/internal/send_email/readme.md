@@ -54,6 +54,9 @@ go run outbox/main.go
 
 # 发布消息到交换机（在新的终端窗口运行）
 go run send/main.go
+
+# 查看和管理事务发件箱 
+go run outbox_ui/main.go
 ```
 
 可多次运行 `go run send/main.go` 观察消费情况。

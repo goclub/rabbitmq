@@ -32,8 +32,8 @@ func run() (err error) {
 	db, err := sql.Open("mysql", "root:somepass@(localhost:3306)/goclub_boot?charset=utf8&loc=Local&parseTime=True") ; if err != nil {
 	    return
 	}
-	// 每1秒发送一条消息
 	for {
+		// 每1秒发送一条消息
 		time.Sleep(1 * time.Second)
 		log.Print("send mesasge")
 		err := func() (err error) {
@@ -52,8 +52,6 @@ func run() (err error) {
 				Mandatory:  true, // 要确保消息能到队列（配合 rab.HandleNotifyReturn 使用 ）
 				Msg:        msg,
 			}
-
-
 			// 开启sql事务
 			tx, err := db.Begin() ; if err != nil {
 				return
@@ -63,7 +61,7 @@ func run() (err error) {
 			// tx.ExecContext(ctx, "INSERT INTO user VALUES (?)",)
 
 			// 插入本地消息到发件箱 outbox
-			outbox, err := mqCh.SQLInsertOutbox(ctx, db, tx, rab.OutboxInsertOption{
+			outbox, err := mqCh.SQLOutboxInsert(ctx, db, tx, rab.OutboxInsertOption{
 				Business: 0,
 				Publish:  publish,
 			}) ; if err != nil {

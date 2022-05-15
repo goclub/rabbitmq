@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
+	rab "github.com/goclub/rabbitmq"
 	emailMessageQueue "github.com/goclub/rabbitmq/example/internal/send_email/mq"
 	"log"
 )
@@ -27,11 +28,27 @@ func run ()(err error) {
 	db, err := sql.Open("mysql", "root:somepass@(localhost:3306)/goclub_boot?charset=utf8&loc=Local&parseTime=True") ; if err != nil {
 		return
 	}
-	err = mqCh.SQLOutboxStartWork(ctx, db, func(err error) {
-		// 正式项目发送到类似 sentry 的平台进行记录
-		log.Printf("%+v", err)
+	list, total , err := mqCh.SQLOutboxQuery(ctx, db, rab.ViewOutboxRequest{
+		Exchange:    "",
+		RoutingKey:  "",
+		Business:    0,
+		Status:      0,
+		OrderByDesc: false,
+		Page:        1,
+		PerPage:     10,
 	}) ; if err != nil {
 	    return
+	}
+	log.Print("total: ", total)
+	for _, outbox := range list {
+		log.Print(outbox.ID)
+	}
+	if len(list) != 0 {
+		id := list[0].ID
+		log.Printf("SQLOutboxSend(ctx, db, %d)", id)
+		err = mqCh.SQLOutboxSend(ctx, db, []uint64{id}) ; if err != nil {
+		    return
+		}
 	}
 	return
 }

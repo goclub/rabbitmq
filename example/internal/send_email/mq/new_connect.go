@@ -43,7 +43,7 @@ func NewConnect() (conn *rab.ProxyConnection, err error) {
 				log.Print(panicRecover)
 			},
 		},
-		// outbox 消息队列本地事务表
+		// outbox 消息队列事务发件箱
 		Outbox: rab.OutboxOption{
 			MaxPublishTimes:     10,
 			NextPublishTime: func(n uint16) time.Duration {

@@ -3,9 +3,11 @@ package rab
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	xerr "github.com/goclub/error"
 	xjson "github.com/goclub/json"
 	"log"
+	"strings"
 	"time"
 )
 const localMessageStatusWaitPublish uint8 = 1
@@ -17,7 +19,11 @@ type OutboxInsertOption struct {
 	Business uint16
 	Publish Publish
 }
-func (c *ProxyChannel) SQLInsertOutbox(ctx context.Context, db *sql.DB, tx *sql.Tx, opt OutboxInsertOption) (outbox SQLOutbox, err error) {
+func (c *ProxyChannel) SQLOutboxInsert(ctx context.Context, db *sql.DB, tx *sql.Tx, opt OutboxInsertOption) (outbox SQLOutbox, err error) {
+	if opt.Business == 0 {
+		err = xerr.New("goclub/rabbitmq: ProxyChannel{}.SQLOutboxInsert(ctx, db, tx, opt) opt.Business can not be 0")
+		return
+	}
 	publishJson, err  := xjson.Marshal(opt.Publish) ; if err != nil {
 	    return
 	}
@@ -30,6 +36,7 @@ func (c *ProxyChannel) SQLInsertOutbox(ctx context.Context, db *sql.DB, tx *sql.
 	values := []interface{}{
 		opt.Publish.Exchange,
 		opt.Publish.RoutingKey,
+		opt.Publish.Msg.MessageId,
 		updateID,
 
 		opt.Business,
@@ -44,12 +51,12 @@ func (c *ProxyChannel) SQLInsertOutbox(ctx context.Context, db *sql.DB, tx *sql.
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO rabbitmq_outbox 
 		(
-		exchange, routing_key, update_id,
+		exchange, routing_key, message_id, update_id,
 		business, publish_json, status, 
 		publish_count, max_publish_times, next_publish_time, create_time 
 		)
 		VALUES
-			(?, ?, ?,  ?, ?, ?,  ?, ?, ?, ?)`, values...) ; if err != nil {
+			(?, ?, ?, ?,  ?, ?, ?,  ?, ?, ?, ?)`, values...) ; if err != nil {
 		err = xerr.WithStack(err)
 		return
 	}
@@ -70,6 +77,7 @@ CREATE TABLE IF NOT EXISTS rabbitmq_outbox (
 id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 exchange varchar(255) NOT NULL DEFAULT '',
 routing_key varchar(255) NOT NULL DEFAULT '',
+message_id char(36) NOT NULL DEFAULT '',
 update_id char(22) NOT NULL DEFAULT '' COMMENT '用于实现并发查询的id',
 business smallint(11) NOT NULL COMMENT '业务编号',
 publish_json text NOT NULL COMMENT '要发送的消息和消息配置',
@@ -80,10 +88,13 @@ next_publish_time datetime NOT NULL COMMENT '下次重试最早时间',
 create_time datetime NOT NULL,
 PRIMARY KEY (id),
 KEY update_id (update_id),
-KEY status (status,next_publish_time)
+KEY status (status,next_publish_time),
+KEY business (business),
+KEY exchange (exchange,routing_key),
+KEY message_id (message_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='本地事务表/消息发件箱\n理论:https://be.nimo.run/theory/mq_outbox\ngo版本实现: https://github.com/goclub/rabbitmq';
 `
-func (c *ProxyChannel) SQLStartOutbox(ctx context.Context, db *sql.DB, onConsumeError func(err error)) (err error) {
+func (c *ProxyChannel) SQLOutboxStartWork(ctx context.Context, db *sql.DB, onConsumeError func(err error)) (err error) {
 	defer func() {
 		if err != nil {
 			err = xerr.WithStack(err)
@@ -143,11 +154,11 @@ LIMIT 1
 			row := db.QueryRowContext(ctx, query, updateID)
 			data := struct {
 				ID int64
-				Message []byte
+				PublishJson []byte
 				PublishCount uint16
 				MaxPublishTimes uint16
 			}{}
-			err = row.Scan(&data.ID, &data.Message, &data.PublishCount, &data.MaxPublishTimes) ; if err != nil {
+			err = row.Scan(&data.ID, &data.PublishJson, &data.PublishCount, &data.MaxPublishTimes) ; if err != nil {
 				if xerr.Is(err, sql.ErrNoRows) {
 					err = xerr.New("goclub/rabbitmq: outbox update_id(" + updateID + ") must has")
 					return
@@ -155,10 +166,12 @@ LIMIT 1
 				return
 			}
 			publish := Publish{}
-			err = xjson.Unmarshal(data.Message, &publish) ; if err != nil {
+			err = xjson.Unmarshal(data.PublishJson, &publish) ; if err != nil {
+				err = xerr.WrapPrefix(fmt.Sprintf("sql outbox id(%d) json unmarshal fail", data.ID), err)
 			    return
 			}
 			err = c.Publish(publish) ; if err != nil {
+				err = xerr.WrapPrefix(fmt.Sprintf("sql outbox id(%d) publish fail", data.ID), err)
 				// dead letter
 				if data.PublishCount >= data.MaxPublishTimes {
 					c.opt.Outbox.Logger.Printf("goclub/rabbitmq:outbox: id(%d) dead letter", data.ID)
@@ -183,7 +196,7 @@ LIMIT 1
 			err = SQLOutbox{db: db, OutboxID: data.ID}.Delete(ctx) ; if err != nil {
 				return
 			}
-			c.opt.Outbox.Logger.Printf("goclub/rabbitmq:outbox: id(%d) published", data.ID)
+			c.opt.Outbox.Logger.Printf("goclub/rabbitmq:sql outbox: id(%d) published", data.ID)
 			return
 		}() ; if err != nil {
 		    onConsumeError(err)
@@ -198,6 +211,143 @@ func (l SQLOutbox) Delete(ctx context.Context) (err error) {
 	_, err = l.db.ExecContext(ctx, "DELETE FROM `rabbitmq_outbox` WHERE id = ?", l.OutboxID) ; if err != nil {
 		err = xerr.WithStack(err)
 		return
+	}
+	return
+}
+
+type ViewOutboxRequest struct {
+	Exchange string `json:"exchange"`
+	RoutingKey string `json:"routingKey"`
+	MessageID string `json:"messageID"`
+	Business uint16 `json:"business"`
+	Status uint8 `json:"status"`
+	OrderByDesc bool `json:"orderByDesc"`
+	Page uint64 `json:"page" default:"1"`
+	PerPage uint64 `json:"perPage" default:"10"`
+}
+type ViewOutbox struct {
+	ID uint64 `json:"id"`
+	Exchange string `json:"exchange"`
+	RoutingKey string `json:"routingKey"`
+	MessageID string `json:"messageID"`
+	Business uint16 `json:"business"`
+	PublishJson string `json:"publishJson"`
+	Status uint8 `json:"status"`
+	CreateTime time.Time `json:"createTime"`
+}
+func (c *ProxyChannel) SQLOutboxQuery(ctx context.Context, db *sql.DB, req ViewOutboxRequest) (list []ViewOutbox, total uint64, err error) {
+	defer func() {
+		if err != nil {
+			err = xerr.WithStack(err)
+		}
+	}()
+	if req.Page == 0 {
+		req.Page = 1
+	}
+	if req.PerPage == 0 {
+		req.PerPage = 10
+	}
+	query := []string{
+		`SELECT id, exchange, routing_key, message_id, business, publish_json, status, create_time FROM rabbitmq_outbox `,
+	}
+	values := []interface{}{}
+	where := []string{}
+	if len(req.Exchange) != 0 {
+		where = append(where, "exchange = ?")
+		values = append(values, req.Exchange)
+	}
+	if len(req.RoutingKey) != 0 {
+		where = append(where, "routing_key = ?")
+		values = append(values, req.RoutingKey)
+	}
+	if len(req.MessageID) != 0 {
+		where = append(where, "message_id = ?")
+		values = append(values, req.MessageID)
+	}
+	if req.Business != 0 {
+		where = append(where, "business = ?")
+		values = append(values, req.Business)
+	}
+	if req.Status != 0 {
+		where = append(where, "status = ?")
+		values = append(values, req.Status)
+	}
+	whereString := ""
+	if len(where) != 0 {
+		whereString = "WHERE " + strings.Join(where, " AND ")
+	}
+	query = append(query, whereString)
+
+	countQuery := `SELECT count(*) FROM rabbitmq_outbox ` + whereString
+	log.Print(countQuery)
+	row := db.QueryRow(countQuery, values...)
+	err = row.Scan(&total) ; if err != nil {
+	    return
+	}
+
+	if req.OrderByDesc {
+		query = append(query, "ORDER BY id desc")
+	}
+	query = append(query, "LIMIT ? OFFSET ?")
+	limit := req.PerPage
+	offset := req.PerPage * (req.Page - 1)
+	values = append(values, limit)
+	values = append(values, offset)
+	rows, err := db.QueryContext(ctx, strings.Join(query, "\n"), values...) ; if err != nil {
+	    return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		v := ViewOutbox{}
+		err = rows.Scan(&v.ID, &v.Exchange, &v.RoutingKey, &v.MessageID, &v.Business, &v.PublishJson, &v.Status, &v.CreateTime) ; if err != nil {
+		    return
+		}
+		list = append(list, v)
+	}
+	return
+}
+
+func (c *ProxyChannel) SQLOutboxSend(ctx context.Context, db *sql.DB, outboxIDList []uint64) (err error) {
+	if len(outboxIDList) == 0 {
+		return
+	}
+	var placeholder []string
+	for i := 0; i < len(outboxIDList); i++ {
+		placeholder = append(placeholder, "?")
+	}
+	query := `SELECT id, publish_json FROM rabbitmq_outbox WHERE id IN(`+ strings.Join(placeholder, ",") +`)`
+	values := []interface{}{}
+	for _, id := range outboxIDList {
+		values = append(values, id)
+	}
+	rows, err := db.QueryContext(ctx, query, values...) ; if err != nil {
+	    return
+	}
+	defer rows.Close()
+	type Data struct {
+		ID int64
+		PublishJson []byte
+	}
+	for rows.Next() {
+		var outboxID int64
+		var publishJSON []byte
+		err =  rows.Scan(&outboxID, &publishJSON,) ; if err != nil {
+		    return
+		}
+		var publish Publish 
+		err = xjson.Unmarshal(publishJSON, &publish) ; if err != nil {
+			err = xerr.WrapPrefix(fmt.Sprintf("sql outbox id(%d) json unmarshal fail", outboxID), err)
+		    return
+		}
+		err = c.Publish(publish) ; if err != nil {
+			return
+		}
+		err = SQLOutbox{
+			db: db,
+			OutboxID: outboxID,
+		}.Delete(ctx) ; if err != nil {
+			return
+		}
 	}
 	return
 }
