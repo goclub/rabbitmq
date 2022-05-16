@@ -279,7 +279,6 @@ func (c *ProxyChannel) SQLOutboxQuery(ctx context.Context, db *sql.DB, req ViewO
 	query = append(query, whereString)
 
 	countQuery := `SELECT count(*) FROM rabbitmq_outbox ` + whereString
-	log.Print(countQuery)
 	row := db.QueryRow(countQuery, values...)
 	err = row.Scan(&total) ; if err != nil {
 	    return
