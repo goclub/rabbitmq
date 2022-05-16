@@ -31,6 +31,7 @@ func run ()(err error) {
 	list, total , err := mqCh.SQLOutboxQuery(ctx, db, rab.ViewOutboxRequest{
 		Exchange:    "",
 		RoutingKey:  "",
+		MessageID: "",
 		Business:    0,
 		Status:      0,
 		OrderByDesc: false,
