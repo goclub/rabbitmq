@@ -63,7 +63,7 @@ go run outbox_ui/main.go
 
 反复重启关闭消费端，观察消费端离线时消息发送情况，和消费端重新上线后消息消费情况。
 
-你可以运行 `go run unbind/main.go` 解绑队列后在运行 `go run send/main.go` 观察 `rab.NotifyReturn` 运行结果。
+你可以运行 `go run unbind/main.go` 解绑队列后在运行 `go run send/main.go` 观察 `HandleNotifyReturn` 运行结果。
 
 > 想恢复绑定则再次运行 `go run migrate/main.go` 即可
 

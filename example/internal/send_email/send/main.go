@@ -47,7 +47,7 @@ func run() (err error) {
 			}
 			// 定义 publish
 			publish := rab.Publish{
-				Exchange:   emailMessageQueue.Framework().FanoutExchange.SendEmail.Name,
+				Exchange:   emailMessageQueue.Framework().Exchange.SendEmail.Name,
 				RoutingKey: "",   // fanout 不需要 key
 				Mandatory:  true, // 要确保消息能到队列（配合 rab.HandleNotifyReturn 使用 ）
 				Msg:        msg,
@@ -59,10 +59,9 @@ func run() (err error) {
 
 			// 插入新用户
 			// tx.ExecContext(ctx, "INSERT INTO user VALUES (?)",)
-
-			// 插入本地消息到发件箱 outbox
+			// 插入事务发件箱 outbox
 			outbox, err := mqCh.SQLOutboxInsert(ctx, db, tx, rab.OutboxInsertOption{
-				Business: 0,
+				Business: 1,
 				Publish:  publish,
 			}) ; if err != nil {
 				return

@@ -19,7 +19,7 @@ func main() {
 	err = mqCh.QueueUnbind(rab.QueueUnbind{
 		Queue:      emailMessageQueue.Framework().Queue.SendEmail.Name,
 		RoutingKey: "",
-		Exchange:   emailMessageQueue.Framework().FanoutExchange.SendEmail.Name,
+		Exchange:   emailMessageQueue.Framework().Exchange.SendEmail.Name,
 	}.Flat()) ; if err != nil {
 		panic(err)
 	}
