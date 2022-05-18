@@ -22,20 +22,20 @@
 
 ### 交换机
 
-1. 名称: x_send_email (约定 x 前缀表示是交换机)
+1. 名称: x_user_signup (约定 x 前缀表示是交换机)
 2. 类型: fanout （当前业务场景简单，所以直接用扇形/广播模式）
 3. 持久化：true
 
 ### 队列
 
-1. 名称: q_send_email (约定 q 前缀表示是队列)
+1. 名称: q_welcome_email (约定 q 前缀表示是队列)
 3. 持久化：true
 
 ### 队列绑定交换机
 
-1. 队列名：q_send_email
+1. 队列名：q_welcome_email
 2. routing key: fanout 不需要 routing key
-3. 交换机名：x_send_email
+3. 交换机名：x_user_signup
 
 
 ### 代码

@@ -28,8 +28,9 @@ func main() {
 }
 func ConsumeSendEmail(mqCh *rab.ProxyChannel) (err error) {
 	ctx := context.Background()
+	f := emailMessageQueue.Framework()
 	msgs, err := mqCh.Consume(rab.Consume{
-		Queue: emailMessageQueue.Framework().Queue.SendEmail.Name,
+		Queue: f.UserSignUp.WelcomeEmail.Queue.Name,
 	})
 	if err != nil {
 		return

@@ -32,6 +32,7 @@ func run() (err error) {
 	db, err := sql.Open("mysql", "root:somepass@(localhost:3306)/goclub_boot?charset=utf8&loc=Local&parseTime=True") ; if err != nil {
 	    return
 	}
+	f := emailMessageQueue.Framework()
 	for {
 		// 每1秒发送一条消息
 		time.Sleep(1 * time.Second)
@@ -47,7 +48,7 @@ func run() (err error) {
 			}
 			// 定义 publish
 			publish := rab.Publish{
-				Exchange:   emailMessageQueue.Framework().Exchange.SendEmail.Name,
+				Exchange:   f.UserSignUp.Exchange.Name,
 				RoutingKey: "",   // fanout 不需要 key
 				Mandatory:  true, // 要确保消息能到队列（配合 rab.HandleNotifyReturn 使用 ）
 				Msg:        msg,
@@ -84,6 +85,7 @@ func run() (err error) {
 			}
 			return
 		}() ; if err != nil {
+			// 正式环境将错误发送到类似sentry的平台
 		    log.Printf("%+v", err)
 		}
 	}

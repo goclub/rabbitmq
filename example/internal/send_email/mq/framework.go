@@ -5,78 +5,73 @@ import (
 	"github.com/streadway/amqp"
 )
 
+type QueueAndBind struct {
+	Queue rab.QueueDeclare
+	Bind rab.QueueBind
+}
 func Framework() (m struct {
-	Exchange struct {
-		SendEmail rab.ExchangeDeclare
+	UserSignUp struct{
+		Exchange     rab.ExchangeDeclare
+		WelcomeEmail QueueAndBind
 	}
-	DeadLetterExchange struct{
-		HumanIntervention rab.ExchangeDeclare
-	}
-	Queue struct {
-		SendEmail     rab.QueueDeclare
-		SendEmailBind rab.QueueBind
-	}
-	DeadLetterQueue struct{
-		SaveToSQL rab.QueueDeclare
-		SaveToSQLBind rab.QueueBind
+	DeadLetterHumanIntervention struct{
+		Exchange rab.ExchangeDeclare
+		SaveToSQL QueueAndBind
 	}
 }) {
-	m.DeadLetterExchange.HumanIntervention = rab.ExchangeDeclare{
+	m.DeadLetterHumanIntervention.Exchange = rab.ExchangeDeclare{
 		Name:       "dlx_human_intervention",
 		Kind:       amqp.ExchangeFanout,
 		Durable:    true,
 	}
-	m.DeadLetterQueue.SaveToSQL = rab.QueueDeclare{
+	m.DeadLetterHumanIntervention.SaveToSQL.Queue = rab.QueueDeclare{
 		Name:       "dlq_save_to_sql",
 		Durable:    true,
 	}
-	m.DeadLetterQueue.SaveToSQLBind = rab.QueueBind{
-		Queue:      m.DeadLetterQueue.SaveToSQLBind.Queue,
-		Exchange:   m.DeadLetterExchange.HumanIntervention.Name,
+	m.DeadLetterHumanIntervention.SaveToSQL.Bind = rab.QueueBind{
+		Queue:      m.DeadLetterHumanIntervention.SaveToSQL.Queue.Name,
+		Exchange:   m.DeadLetterHumanIntervention.Exchange.Name,
 	}
-	m.Exchange.SendEmail = rab.ExchangeDeclare{
-		Name:    "x_send_email",
+
+	m.UserSignUp.Exchange = rab.ExchangeDeclare{
+		Name:    "x_user_signup",
 		Kind:    amqp.ExchangeFanout,
 		Durable: true,
 	}
-	m.Queue.SendEmail = rab.QueueDeclare{
-		Name:    "q_send_email",
+	m.UserSignUp.WelcomeEmail.Queue = rab.QueueDeclare{
+		Name:    "q_welcome_email",
 		Durable: true,
-		// Args: map[string]interface{}{
-		// 	"x-dead-letter-exchange": m.DeadLetterExchange.HumanIntervention.Name.String(),
-		// },
+		Args: map[string]interface{}{
+			"x-dead-letter-exchange": m.DeadLetterHumanIntervention.Exchange.Name.String(),
+		},
 	}
-	m.Queue.SendEmailBind = rab.QueueBind{
-		Queue:      m.Queue.SendEmail.Name,
+	m.UserSignUp.WelcomeEmail.Bind = rab.QueueBind{
+		Queue:      m.UserSignUp.WelcomeEmail.Queue.Name,
 		RoutingKey: "", // fanout 不需要 routing key
-		Exchange:   m.Exchange.SendEmail.Name,
+		Exchange:   m.UserSignUp.Exchange.Name,
 	}
 	return
 }
 
 func InitDeclareAndBind(mqCh *rab.ProxyChannel) (err error) {
 	f := Framework()
-	// dead letter HumanIntervention
-	// err = mqCh.ExchangeDeclare(f.DeadLetterExchange.HumanIntervention) ; if err != nil {
-	// 	return
-	// }
-	// _, err = mqCh.QueueDeclare(f.DeadLetterQueue.SaveToSQL) ; if err != nil {
-	// 	return
-	// }
-	// err = mqCh.QueueBind(f.DeadLetterQueue.SaveToSQLBind) ; if err != nil {
-	// 	return
-	// }
-
-	// sendEmail
-	err = mqCh.ExchangeDeclare(f.Exchange.SendEmail) ; if err != nil {
-		return
+	err = mqCh.ExchangeDeclare(f.DeadLetterHumanIntervention.Exchange) ; if err != nil {
+	    return
 	}
-	_, err = mqCh.QueueDeclare(f.Queue.SendEmail) ; if err != nil {
-		return
+	_, err = mqCh.QueueDeclare(f.DeadLetterHumanIntervention.SaveToSQL.Queue) ; if err != nil {
+	    return
 	}
-	err = mqCh.QueueBind(f.Queue.SendEmailBind) ; if err != nil {
-		return
+	err = mqCh.QueueBind(f.DeadLetterHumanIntervention.SaveToSQL.Bind) ; if err != nil {
+	    return
 	}
-
+	err = mqCh.ExchangeDeclare(f.UserSignUp.Exchange) ; if err != nil {
+	    return
+	}
+	_, err = mqCh.QueueDeclare(f.UserSignUp.WelcomeEmail.Queue) ; if err != nil {
+	    return
+	}
+	err = mqCh.QueueBind(f.UserSignUp.WelcomeEmail.Bind) ; if err != nil {
+	    return
+	}
 	return
 }

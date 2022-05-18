@@ -16,10 +16,18 @@ func main() {
 		panic(err)
 	}
 	defer mqChClose()
+	f := emailMessageQueue.Framework()
 	err = mqCh.QueueUnbind(rab.QueueUnbind{
-		Queue:      emailMessageQueue.Framework().Queue.SendEmail.Name,
+		Queue:      f.UserSignUp.WelcomeEmail.Queue.Name,
 		RoutingKey: "",
-		Exchange:   emailMessageQueue.Framework().Exchange.SendEmail.Name,
+		Exchange: f.UserSignUp.Exchange.Name,
+	}.Flat()) ; if err != nil {
+		panic(err)
+	}
+	err = mqCh.QueueUnbind(rab.QueueUnbind{
+		Queue:      f.DeadLetterHumanIntervention.SaveToSQL.Queue.Name,
+		RoutingKey: "",
+		Exchange: f.DeadLetterHumanIntervention.Exchange.Name,
 	}.Flat()) ; if err != nil {
 		panic(err)
 	}
