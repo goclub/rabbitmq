@@ -17,6 +17,7 @@ func main () {
 }
 
 func run() (err error) {
+	log.Print("start consume save to sql")
 	ctx := context.Background()
 	// 连接 rabbitmq
 	conn, err := m.NewConnect() ; if err != nil {

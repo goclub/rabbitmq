@@ -295,41 +295,53 @@ func(channel *ProxyChannel) DeadLetterSaveToSQL(ctx context.Context, opt DeadLet
 	for delivery := range msgs {
 		err = ConsumeDelivery{
 			Delivery: delivery,
-			RequeueMiddleware: opt.RequeueMiddleware,
+			// RequeueMiddleware: opt.RequeueMiddleware,
+			RequeueMiddleware: func(d *amqp.Delivery) (requeue bool) {
+				return true
+			},
 			Handle: func(ctx context.Context, d *amqp.Delivery) DeliveryResult {
 				type Death struct {
 					Exchange    string    `json:"exchange"`
 					Queue       string    `json:"queue"`
 					Reason      string    `json:"reason"`
 					RoutingKeys []string  `json:"routing-keys"`
-					Time        time.Time `json:"time"`
+					Time        string `json:"time"`
 				}
 				headers := struct {
-					XDeath []Death
+					XDeath []Death `json:"x-death"`
 					XFirstDeathExchange string `json:"x-first-death-exchange"`
 					XFirstDeathQueue    string `json:"x-first-death-queue"`
 					XFirstDeathReason   string `json:"x-first-death-reason"`
 				}{}
+
 				var firstDeath Death
 				headersJson, err := xjson.Marshal(d.Headers) ; if err != nil {
 					// 理论上不会出错所以调用 OnConsumerError 并忽略错误
-					opt.OnConsumerError(err, d)
+					opt.OnConsumerError(xerr.WithStack(err), d)
 					err = nil
 					headersJson = []byte(`{}`)
 				}
 				err = xjson.Unmarshal(headersJson, &headers) ; if err != nil {
 					// 理论上不会出错所以调用 OnConsumerError 并忽略错误
-					opt.OnConsumerError(err, d)
+					opt.OnConsumerError(xerr.WithStack(err), d)
 					err = nil
 				}
 				if len(headers.XDeath) != 0 {
 					firstDeath = headers.XDeath[0]
 				}
+				var firstDeathTime time.Time
+				firstDeathTime, err = time.Parse(time.RFC3339, firstDeath.Time) ; if err != nil {
+					// 理论上不会出错所以调用 OnConsumerError 并忽略错误
+					opt.OnConsumerError(xerr.WithStack(err), d)
+					err = nil
+				}
+				firstDeathTime = firstDeathTime.In(opt.Timezone)
 					query := `
 INSERT INTO rabbitmq_dead_letter 
     (
      message_id, message_time, exchange, routing_key, 
-     first_death_exchange, first_death_queue, first_death_reason, first_death_time, 
+     first_death_exchange, first_death_queue, first_death_reason,
+     first_death_routing_keys_json, first_death_time,
      message_json, create_time
      )
 VALUES
@@ -340,9 +352,16 @@ VALUES
 					opt.OnConsumerError(err, d)
 					err = nil
 				}
+				firstDeathRoutingKeysJSON, err := xjson.Marshal(firstDeath.RoutingKeys) ; if err != nil {
+					// 理论上不会出错所以调用 OnConsumerError 并忽略错误
+					opt.OnConsumerError(err, d)
+					err = nil
+				}
 				values := []interface{}{
 					d.MessageId, d.Timestamp.In(opt.Timezone), d.Exchange, d.RoutingKey,
-					firstDeath.Exchange, firstDeath.Queue, firstDeath.Reason, firstDeath.Time,
+					firstDeath.Exchange, firstDeath.Queue, firstDeath.Reason,
+					firstDeathRoutingKeysJSON,
+					firstDeathTime,
 					message_json, time.Now().In(opt.Timezone),
 				}
 				_, err = db.ExecContext(ctx, query , values...) ; if err != nil {

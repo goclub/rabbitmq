@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	xerr "github.com/goclub/error"
-	xsync "github.com/goclub/sync"
 	"github.com/streadway/amqp"
 )
 
@@ -56,31 +55,42 @@ func (h ConsumeDelivery) Do(ctx context.Context) (err error) {
 		return xerr.New("goclub/rabbitmq: HandleDelivery{}.Do() RequeueFilter can not be nil")
 	}
 	resultCh := make(chan DeliveryResult, 1)
-	errCh, err := xsync.Go(func() (err error) {
+	panicCh := make(chan error, 1)
+	go func() {
+		defer func() {
+			r := recover()
+			if r != nil {
+				var panicErr error
+				switch v := r.(type) {
+				case error:
+					panicErr = v
+				default:
+					panicErr = xerr.Errorf("%+v", r)
+				}
+				panicCh <- panicErr
+			}
+		}()
 		resultCh <- h.Handle(ctx, &h.Delivery)
-		return nil
-	})
-	if err != nil {
-		return
-	}
+	}()
 	select {
 	case <-ctx.Done():
 		err = ctx.Err()
+		// 超时则重新入队, 特意忽略错误,因为已经存在错误
+		_  = h.Delivery.Reject(h.RequeueMiddleware(&h.Delivery))
 		return err
-	case err = <-errCh:
-		return err
+	case panicErr := <-panicCh:
+		// 发生 panic 则重新入队, 特意忽略错误,因为已经存在错误
+		_  = h.Delivery.Reject(h.RequeueMiddleware(&h.Delivery))
+		return panicErr
 	case result := <-resultCh:
 		if result.ack {
 			return h.Delivery.Ack(false)
 		} else {
-			requeue := result.requeue
-			if requeue {
-				requeue = h.RequeueMiddleware(&h.Delivery)
+			if result.requeue == true {
+				result.requeue = h.RequeueMiddleware(&h.Delivery)
 			}
-			err = h.Delivery.Reject(requeue)
-			if err != nil {
-				return
-			}
+			// 特意忽略错误,因为已经存在错误
+			_ = h.Delivery.Reject(result.requeue)
 			if result.err != nil {
 				return result.err
 			}
