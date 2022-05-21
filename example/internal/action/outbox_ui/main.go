@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 	rab "github.com/goclub/rabbitmq"
-	emailMessageQueue "github.com/goclub/rabbitmq/example/internal/send_email/mq"
+	"github.com/goclub/rabbitmq/example/internal/action/model"
 	"log"
 )
 
@@ -15,7 +15,7 @@ func main() {
 func run ()(err error) {
 	ctx := context.Background()
 	// 连接 rabbitmq
-	conn, err := emailMessageQueue.NewConnect() ; if err != nil {
+	conn, err := m.NewConnect() ; if err != nil {
 		return
 	}
 	// 连接 channel

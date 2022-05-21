@@ -19,9 +19,9 @@ type Option struct {
 type OutboxOption struct {
 	MaxPublishTimes     uint16                       `default:"10"`
 	NextPublishTime     func(n uint16) time.Duration `default:"3s"`
-	ConsumeLoopInterval time.Duration                `default:"1s"`
-	TimeZone					*time.Location `default:"time.FixedZone("CST", 8*3600) china"`
-	Logger 						*log.Logger	   `default:"log.Default()"`
+	ConsumeLoopInterval time.Duration  `default:"1s"`
+	Timezone            *time.Location `default:"time.FixedZone("CST", 8*3600) china"`
+	Logger              *log.Logger    `default:"log.Default()"`
 }
 
 type HandleNotifyReturn struct {
@@ -58,8 +58,8 @@ func (o *Option) init() (err error) {
 	if o.Outbox.ConsumeLoopInterval == 0 {
 		o.Outbox.ConsumeLoopInterval = time.Second * 1
 	}
-	if o.Outbox.TimeZone == nil {
-		o.Outbox.TimeZone = time.FixedZone("CST", 8*3600)
+	if o.Outbox.Timezone == nil {
+		o.Outbox.Timezone = time.FixedZone("CST", 8*3600)
 	}
 	if o.Outbox.Logger == nil {
 		o.Outbox.Logger = log.Default()

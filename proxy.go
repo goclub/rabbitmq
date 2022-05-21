@@ -1,9 +1,14 @@
 package rab
 
 import (
+	"context"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	xerr "github.com/goclub/error"
+	xjson "github.com/goclub/json"
 	"github.com/streadway/amqp"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -224,4 +229,132 @@ func (channel *ProxyChannel) QueueBind(queueBind QueueBind) (err error) {
 	}()
 	name, key, exchange, noWait, args := queueBind.Flat()
 	return channel.Channel.QueueBind(name, key, exchange, noWait, args)
+}
+
+type DeadLetterSaveToSQLOption struct {
+	DB *sql.DB
+	QueueName QueueName
+	OnConsumerError func(err error, d *amqp.Delivery)
+	RequeueMiddleware func(d *amqp.Delivery) (requeue bool)
+	Timezone        *time.Location `default:"time.FixedZone("CST", 8*3600) china"`
+
+}
+func (opt DeadLetterSaveToSQLOption) initAndCheck (ctx context.Context)(err error) {
+	defer func() {
+		if err != nil {
+			err = xerr.WithStack(err)
+		}
+	}()
+	if opt.DB == nil {
+		err = xerr.New("goclub/rabbitmq: ProxyChannel{}.DeadLetterSaveToSQL(ctx, opt) opt.db can not be nil")
+		return
+	}
+	err = opt.DB.PingContext(ctx) ; if err != nil {
+	    return
+	}
+	if opt.QueueName == "" {
+		err = xerr.New("goclub/rabbitmq: ProxyChannel{}.DeadLetterSaveToSQL(ctx, opt) opt.QueueName can not be empty string")
+		return
+	}
+	if opt.OnConsumerError == nil {
+		opt.OnConsumerError = func(err error, d *amqp.Delivery) {
+			log.Printf("goclub/rabbitmq: DeadLetterSaveToSQL %+v", err)
+			jsond, err := json.Marshal(d) ; if err != nil {
+				log.Printf("%+v", err)
+			}
+			log.Print("delivery", string(jsond))
+		}
+	}
+	if opt.RequeueMiddleware == nil {
+		err = xerr.New("goclub/rabbitmq: ProxyChannel{}.DeadLetterSaveToSQL(ctx, opt) opt.RequeueMiddleware can not be nil")
+		return
+	}
+	if opt.Timezone == nil {
+		opt.Timezone = time.FixedZone("CST", 8*3600)
+	}
+	return
+}
+// DeadLetterSaveToSQL
+// https://www.rabbitmq.com/dlx.html
+func(channel *ProxyChannel) DeadLetterSaveToSQL(ctx context.Context, opt DeadLetterSaveToSQLOption) (err error) {
+	err = opt.initAndCheck(ctx) ; if err != nil {
+	    return
+	}
+	defer func() {
+		if err != nil {
+			err = xerr.WithStack(err)
+		}
+	}()
+	db := opt.DB
+	msgs, err := channel.Consume(Consume{
+		Queue:       opt.QueueName,
+		ConsumerTag: "goclub/rabbitmq:DeadLetterSaveToSQL",
+	}) ; if err != nil {
+	    return
+	}
+	for delivery := range msgs {
+		err = ConsumeDelivery{
+			Delivery: delivery,
+			RequeueMiddleware: opt.RequeueMiddleware,
+			Handle: func(ctx context.Context, d *amqp.Delivery) DeliveryResult {
+				type Death struct {
+					Exchange    string    `json:"exchange"`
+					Queue       string    `json:"queue"`
+					Reason      string    `json:"reason"`
+					RoutingKeys []string  `json:"routing-keys"`
+					Time        time.Time `json:"time"`
+				}
+				headers := struct {
+					XDeath []Death
+					XFirstDeathExchange string `json:"x-first-death-exchange"`
+					XFirstDeathQueue    string `json:"x-first-death-queue"`
+					XFirstDeathReason   string `json:"x-first-death-reason"`
+				}{}
+				var firstDeath Death
+				headersJson, err := xjson.Marshal(d.Headers) ; if err != nil {
+					// 理论上不会出错所以调用 OnConsumerError 并忽略错误
+					opt.OnConsumerError(err, d)
+					err = nil
+					headersJson = []byte(`{}`)
+				}
+				err = xjson.Unmarshal(headersJson, &headers) ; if err != nil {
+					// 理论上不会出错所以调用 OnConsumerError 并忽略错误
+					opt.OnConsumerError(err, d)
+					err = nil
+				}
+				if len(headers.XDeath) != 0 {
+					firstDeath = headers.XDeath[0]
+				}
+					query := `
+INSERT INTO rabbitmq_dead_letter 
+    (
+     message_id, message_time, exchange, routing_key, 
+     first_death_exchange, first_death_queue, first_death_reason, first_death_time, 
+     message_json, create_time
+     )
+VALUES
+(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+`
+				message_json, err := xjson.Marshal(d) ; if err != nil {
+					// 理论上不会出错所以调用 OnConsumerError 并忽略错误
+					opt.OnConsumerError(err, d)
+					err = nil
+				}
+				values := []interface{}{
+					d.MessageId, d.Timestamp.In(opt.Timezone), d.Exchange, d.RoutingKey,
+					firstDeath.Exchange, firstDeath.Queue, firstDeath.Reason, firstDeath.Time,
+					message_json, time.Now().In(opt.Timezone),
+				}
+				_, err = db.ExecContext(ctx, query , values...) ; if err != nil {
+					// 插入sql可能因为网络或sql不稳定导致失败,此时应该 requeue
+					opt.OnConsumerError(err, d)
+					return Reject(err, true)
+				}
+				return Ack()
+			},
+		}.Do(ctx) ; if err != nil {
+			opt.OnConsumerError(err, nil)
+		}
+	}
+	return
 }

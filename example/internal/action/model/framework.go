@@ -1,4 +1,4 @@
-package emailMessageQueue
+package m
 
 import (
 	rab "github.com/goclub/rabbitmq"
@@ -15,7 +15,7 @@ func Framework() (m struct {
 		WelcomeEmail QueueAndBind
 	}
 	DeadLetterHumanIntervention struct{
-		Exchange rab.ExchangeDeclare
+		Exchange  rab.ExchangeDeclare
 		SaveToSQL QueueAndBind
 	}
 }) {

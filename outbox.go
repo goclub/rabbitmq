@@ -29,8 +29,8 @@ func (c *ProxyChannel) SQLOutboxInsert(ctx context.Context, db *sql.DB, tx *sql.
 	}
 	publishCount := 0
 	maxPublishTimes := c.opt.Outbox.MaxPublishTimes
-	utcNextPublishTime := time.Now().Add(c.opt.Outbox.NextPublishTime(1)).In(c.opt.Outbox.TimeZone)
-	createTime := time.Now().In(c.opt.Outbox.TimeZone)
+	utcNextPublishTime := time.Now().Add(c.opt.Outbox.NextPublishTime(1)).In(c.opt.Outbox.Timezone)
+	createTime := time.Now().In(c.opt.Outbox.Timezone)
 
 	updateID := MessageID()
 	values := []interface{}{
@@ -115,7 +115,7 @@ func (c *ProxyChannel) SQLOutboxStartWork(ctx context.Context, db *sql.DB, onCon
 		time.Sleep(consumeLoopInterval)
 		err := func () (err error){
 			updateID := MessageID()
-			now := time.Now().In(c.opt.Outbox.TimeZone)
+			now := time.Now().In(c.opt.Outbox.Timezone)
 			// 先 NextPublishTime(2) 操作完成后再 NextPublishTime(publish_count)
 			nextPublishTime := now.Add(c.opt.Outbox.NextPublishTime(2))
 			query := `
@@ -183,7 +183,7 @@ LIMIT 1
 				}
 				// NextPublishTime
 				query = `UPDATE rabbitmq_outbox SET next_publish_time = ? WHERE id = ? LIMIT 1`
-				nextPublishTime := time.Now().In(c.opt.Outbox.TimeZone).Add(c.opt.Outbox.NextPublishTime(data.PublishCount))
+				nextPublishTime := time.Now().In(c.opt.Outbox.Timezone).Add(c.opt.Outbox.NextPublishTime(data.PublishCount))
 				_, updateErr := db.ExecContext(ctx, query,
 					nextPublishTime,
 					data.ID,

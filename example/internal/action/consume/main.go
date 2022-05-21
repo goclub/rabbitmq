@@ -4,19 +4,18 @@ import (
 	"context"
 	xerr "github.com/goclub/error"
 	rab "github.com/goclub/rabbitmq"
-	"github.com/goclub/rabbitmq/example/internal/send_email/mq"
+	"github.com/goclub/rabbitmq/example/internal/action/model"
 	"github.com/streadway/amqp"
 	"log"
 	"time"
 )
 
 func main() {
-	conn, err := emailMessageQueue.NewConnect()
+	conn, err := m.NewConnect()
 	if err != nil {
 		panic(err)
 	}
-	mqCh, mqChClose, err := conn.Channel()
-	if err != nil {
+	mqCh, mqChClose, err := conn.Channel() ; if err != nil {
 		panic(err)
 	}
 	defer mqChClose()
@@ -26,9 +25,10 @@ func main() {
 		panic(err)
 	}
 }
+
 func ConsumeSendEmail(mqCh *rab.ProxyChannel) (err error) {
 	ctx := context.Background()
-	f := emailMessageQueue.Framework()
+	f := m.Framework()
 	msgs, err := mqCh.Consume(rab.Consume{
 		Queue: f.UserSignUp.WelcomeEmail.Queue.Name,
 	})
@@ -44,17 +44,24 @@ func ConsumeSendEmail(mqCh *rab.ProxyChannel) (err error) {
 			Delivery: d,
 			// 通过 重新入队中间件控制同一个消费只重复入队3次,避免一些无法被消费的消息反复消费
 			RequeueMiddleware: func(d *amqp.Delivery) (requeue bool) {
-				return true
+				// 同一消息最多能重新入队3次
+				// 正式项目中请使用 https://github.com/goclub/redis#IncrLimiter 实现
+				return m.RequeueIncrLimiter(d.MessageId, 3)
 			},
 			Handle: func(ctx context.Context, d *amqp.Delivery) rab.DeliveryResult {
-				var msg emailMessageQueue.SendEmailMessage
+				var err error
+				// 通过 return rab.Reject 拒绝消息, err 会通过 Do(handleCtx)(err error) 传递
+				// requeue := true
+				// return rab.Reject(err, requeue)
+
+				var msg m.UserSignupMessage
 				log.Print("received message")
-				err := msg.DecodeDelivery(d)
+				err = msg.DecodeDelivery(d)
 				if err != nil {
 					// 不重新入队,因为 json decode 失败即使重新入队再次消费还是会错误
 					return rab.Reject(err, false)
 				}
-				log.Print("consume: from " + msg.From + ", to " + msg.To + "(" + msg.Subject + ")")
+				log.Print( "欢迎 " + msg.Email)
 				// 消费完成后应答消息处理完成
 				return rab.Ack()
 			},

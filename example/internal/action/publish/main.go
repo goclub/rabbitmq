@@ -6,10 +6,9 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	xerr "github.com/goclub/error"
 	rab "github.com/goclub/rabbitmq"
-	"github.com/goclub/rabbitmq/example/internal/send_email/mq"
+	"github.com/goclub/rabbitmq/example/internal/action/model"
 	"log"
 	"math/rand"
-	"strconv"
 	"time"
 )
 
@@ -19,7 +18,7 @@ func main() {
 func run() (err error) {
 	ctx := context.Background()
 	// 连接 rabbitmq
-	conn, err := emailMessageQueue.NewConnect() ; if err != nil {
+	conn, err := m.NewConnect() ; if err != nil {
 		return
 	}
 	// 连接 channel
@@ -32,17 +31,15 @@ func run() (err error) {
 	db, err := sql.Open("mysql", "root:somepass@(localhost:3306)/goclub_boot?charset=utf8&loc=Local&parseTime=True") ; if err != nil {
 	    return
 	}
-	f := emailMessageQueue.Framework()
+	f := m.Framework()
 	for {
 		// 每1秒发送一条消息
 		time.Sleep(1 * time.Second)
 		log.Print("send mesasge")
 		err := func() (err error) {
 			// 定义消息内容
-			msg, err := emailMessageQueue.SendEmailMessage{
-				From:    "news@goclub.run",
-				To:      "abc@domain.com",
-				Subject: strconv.Itoa(time.Now().Second()),
+			msg, err := m.UserSignupMessage{
+				Email:    "some@goclub.run",
 			}.Publishing() ; if err != nil {
 				return
 			}

@@ -1,4 +1,4 @@
-package emailMessageQueue
+package m
 
 import (
 	xjson "github.com/goclub/json"
@@ -6,15 +6,13 @@ import (
 	"github.com/streadway/amqp"
 )
 
-type SendEmailMessage struct {
-	From string `json:"from"`
-	To string `json:"to"`
-	Subject string `json:"subject"`
+type UserSignupMessage struct {
+	Email string `json:"email"`
 }
-func (v *SendEmailMessage) DecodeDelivery(d *amqp.Delivery) error {
+func (v *UserSignupMessage) DecodeDelivery(d *amqp.Delivery) error {
 	return xjson.Unmarshal(d.Body, v)
 }
-func (v SendEmailMessage) Publishing () (p amqp.Publishing, err error) {
+func (v UserSignupMessage) Publishing () (p amqp.Publishing, err error) {
 	body, err := xjson.Marshal(v) ; if err != nil {
 		return
 	}

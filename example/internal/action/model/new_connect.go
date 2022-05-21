@@ -1,4 +1,4 @@
-package emailMessageQueue
+package m
 
 import (
 	xerr "github.com/goclub/error"
@@ -50,7 +50,7 @@ func NewConnect() (conn *rab.ProxyConnection, err error) {
 				return time.Duration(n) * time.Second * 3
 			},
 			ConsumeLoopInterval: time.Second,
-			TimeZone:            time.FixedZone("CST", 8*3600),
+			Timezone:            time.FixedZone("CST", 8*3600),
 			Logger:              log.Default(),
 		},
 	})
