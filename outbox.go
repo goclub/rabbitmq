@@ -16,14 +16,9 @@ const localMessageStatusDeadLetter uint8 = 3
 
 
 type OutboxInsertOption struct {
-	Business uint16
 	Publish Publish
 }
 func (c *ProxyChannel) SQLOutboxInsert(ctx context.Context, db *sql.DB, tx *sql.Tx, opt OutboxInsertOption) (outbox SQLOutbox, err error) {
-	if opt.Business == 0 {
-		err = xerr.New("goclub/rabbitmq: ProxyChannel{}.SQLOutboxInsert(ctx, db, tx, opt) opt.Business can not be 0")
-		return
-	}
 	publishJson, err  := xjson.Marshal(opt.Publish) ; if err != nil {
 	    return
 	}
@@ -39,7 +34,6 @@ func (c *ProxyChannel) SQLOutboxInsert(ctx context.Context, db *sql.DB, tx *sql.
 		opt.Publish.Msg.MessageId,
 		updateID,
 
-		opt.Business,
 		publishJson,
 		localMessageStatusWaitPublish,
 
@@ -52,11 +46,11 @@ func (c *ProxyChannel) SQLOutboxInsert(ctx context.Context, db *sql.DB, tx *sql.
 		INSERT INTO rabbitmq_outbox 
 		(
 		exchange, routing_key, message_id, update_id,
-		business, publish_json, status, 
+		publish_json, status, 
 		publish_count, max_publish_times, next_publish_time, create_time 
 		)
 		VALUES
-			(?, ?, ?, ?,  ?, ?, ?,  ?, ?, ?, ?)`, values...) ; if err != nil {
+			(?, ?, ?, ?, ?, ?,  ?, ?, ?, ?)`, values...) ; if err != nil {
 		err = xerr.WithStack(err)
 		return
 	}
@@ -79,7 +73,6 @@ exchange varchar(255) NOT NULL DEFAULT '',
 routing_key varchar(255) NOT NULL DEFAULT '',
 message_id char(36) NOT NULL DEFAULT '',
 update_id char(22) NOT NULL DEFAULT '' COMMENT '用于实现并发查询的id',
-business smallint(11) NOT NULL COMMENT '业务编号',
 publish_json text NOT NULL COMMENT '要发送的消息和消息配置',
 status tinyint(4) unsigned NOT NULL COMMENT '状态:1 等待重试 2 处理中 3 死信(发送完成的sql行会被删除)',
 publish_count smallint(4) unsigned NOT NULL COMMENT '重试次数',
@@ -89,11 +82,11 @@ create_time datetime NOT NULL,
 PRIMARY KEY (id),
 KEY update_id (update_id),
 KEY status (status,next_publish_time),
-KEY business (business),
 KEY exchange (exchange,routing_key),
 KEY message_id (message_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='本地事务表/消息发件箱\n理论:https://be.nimo.run/theory/mq_outbox\ngo版本实现: https://github.com/goclub/rabbitmq';
 `
+
 func (c *ProxyChannel) SQLOutboxStartWork(ctx context.Context, db *sql.DB, onConsumeError func(err error)) (err error) {
 	defer func() {
 		if err != nil {
@@ -219,7 +212,6 @@ type ViewOutboxRequest struct {
 	Exchange string `json:"exchange"`
 	RoutingKey string `json:"routingKey"`
 	MessageID string `json:"messageID"`
-	Business uint16 `json:"business"`
 	Status uint8 `json:"status"`
 	OrderByDesc bool `json:"orderByDesc"`
 	Page uint64 `json:"page" default:"1"`
@@ -230,7 +222,6 @@ type ViewOutbox struct {
 	Exchange string `json:"exchange"`
 	RoutingKey string `json:"routingKey"`
 	MessageID string `json:"messageID"`
-	Business uint16 `json:"business"`
 	PublishJson string `json:"publishJson"`
 	Status uint8 `json:"status"`
 	CreateTime time.Time `json:"createTime"`
@@ -248,7 +239,7 @@ func (c *ProxyChannel) SQLOutboxQuery(ctx context.Context, db *sql.DB, req ViewO
 		req.PerPage = 10
 	}
 	query := []string{
-		`SELECT id, exchange, routing_key, message_id, business, publish_json, status, create_time FROM rabbitmq_outbox `,
+		`SELECT id, exchange, routing_key, message_id, publish_json, status, create_time FROM rabbitmq_outbox `,
 	}
 	values := []interface{}{}
 	where := []string{}
@@ -263,10 +254,6 @@ func (c *ProxyChannel) SQLOutboxQuery(ctx context.Context, db *sql.DB, req ViewO
 	if len(req.MessageID) != 0 {
 		where = append(where, "message_id = ?")
 		values = append(values, req.MessageID)
-	}
-	if req.Business != 0 {
-		where = append(where, "business = ?")
-		values = append(values, req.Business)
 	}
 	if req.Status != 0 {
 		where = append(where, "status = ?")
@@ -298,7 +285,7 @@ func (c *ProxyChannel) SQLOutboxQuery(ctx context.Context, db *sql.DB, req ViewO
 	defer rows.Close()
 	for rows.Next() {
 		v := ViewOutbox{}
-		err = rows.Scan(&v.ID, &v.Exchange, &v.RoutingKey, &v.MessageID, &v.Business, &v.PublishJson, &v.Status, &v.CreateTime) ; if err != nil {
+		err = rows.Scan(&v.ID, &v.Exchange, &v.RoutingKey, &v.MessageID, &v.PublishJson, &v.Status, &v.CreateTime) ; if err != nil {
 		    return
 		}
 		list = append(list, v)

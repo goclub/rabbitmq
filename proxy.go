@@ -119,12 +119,13 @@ func (conn *ProxyConnection) Channel() (channel *ProxyChannel, channelClose func
 	}()
 	go func() {
 		for {
-			notifyClose, ok := <-channel.Channel.NotifyClose(make(chan *amqp.Error))
-			if !ok || channel.IsClosed() {
-				conn.opt.OnReconnect("channel closed")
-				channel.Close() // close again, ensure closed flag set when connection closed
-				break
-			}
+			notifyClose := <-channel.Channel.NotifyClose(make(chan *amqp.Error))
+			// 暂时取消 close 逻辑观察极端情况下的重连
+			// if !ok || channel.IsClosed() {
+			// 	conn.opt.OnReconnect("channel closed")
+			// 	channel.Close() // close again, ensure closed flag set when connection closed
+			// 	break
+			// }
 			conn.opt.OnReconnect(fmt.Sprintf("channel closed, reason: %v", notifyClose))
 			for {
 				time.Sleep(time.Second)

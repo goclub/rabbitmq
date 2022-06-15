@@ -8,6 +8,8 @@ github.com/goclub/json v0.0.0-20220423105620-2f7d38d8b86a h1:1EwfWAaiCyL/HA5ibXe
 github.com/goclub/json v0.0.0-20220423105620-2f7d38d8b86a/go.mod h1:K7bX26XRz/QHEzyXUZNCYwN8yQsrfedeC1hhsE9HcRk=
 github.com/goclub/sync v0.0.0-20220222013725-8c0c4e190ec4 h1:HtCJ6ehBwbETitnFTVL8GvYETeUD0UHRna7Fa2DE0BM=
 github.com/goclub/sync v0.0.0-20220222013725-8c0c4e190ec4/go.mod h1:fzBv9mnCwlHSFBlA0A3ilYTvwTOyEiNetB5DncGGhEk=
+github.com/goclub/sync v0.0.0-20220521125149-7009738b1294 h1:eHGz8wObRdEBzmKQUZIiRhMgK7ygCMM4MlQLfJUUVVg=
+github.com/goclub/sync v0.0.0-20220521125149-7009738b1294/go.mod h1:BCczZTDOpqvg8sT1uhmPbZ4y+GLTkCcSLC3u23dF/Ys=
 github.com/matoous/go-nanoid v1.5.0 h1:VRorl6uCngneC4oUQqOYtO3S0H5QKFtKuKycFG3euek=
 github.com/matoous/go-nanoid v1.5.0/go.mod h1:zyD2a71IubI24efhpvkJz+ZwfwagzgSO6UNiFsZKN7U=
 github.com/matoous/go-nanoid/v2 v2.0.0 h1:d19kur2QuLeHmJBkvYkFdhFBzLoo1XVm2GgTpL+9Tj0=
