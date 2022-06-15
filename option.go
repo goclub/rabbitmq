@@ -3,6 +3,7 @@ package rab
 import (
 	"github.com/streadway/amqp"
 	"log"
+	"os"
 	"runtime/debug"
 	"time"
 )
@@ -62,7 +63,7 @@ func (o *Option) init() (err error) {
 		o.Outbox.Timezone = time.FixedZone("CST", 8*3600)
 	}
 	if o.Outbox.Logger == nil {
-		o.Outbox.Logger = log.Default()
+		o.Outbox.Logger = log.New(os.Stderr, "", log.LstdFlags)
 	}
 	return
 }
