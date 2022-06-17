@@ -6,15 +6,14 @@ import (
 	rab "github.com/goclub/rabbitmq"
 	"github.com/streadway/amqp"
 	"log"
-	"runtime/debug"
 	"time"
 )
 
 func NewConnect() (conn *rab.ProxyConnection, err error) {
 	return rab.Dial("amqp://guest:guest@localhost:5672/", rab.Option{
 		// goclub/rabbitmq 有重连机制,当发生重连时会触发 OnReconnect
-		OnReconnect: func(message string) {
-			log.Print(message, string(debug.Stack()))
+		OnReconnect: func(reconnectID string, message string, err error) {
+			log.Print(reconnectID, ": ", message, " ", err)
 		},
 		// NotifyReturn 用于订阅发送时退回的消息 需在 Publish 时配合 Mandatory 使用
 		HandleNotifyReturn: rab.HandleNotifyReturn{

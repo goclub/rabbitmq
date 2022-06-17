@@ -59,9 +59,9 @@ func run() (err error) {
 			// tx.ExecContext(ctx, "INSERT INTO user VALUES (?)",)
 			// 插入事务发件箱 outbox
 			outbox, err := mqCh.SQLOutboxInsert(ctx, db, tx, rab.OutboxInsertOption{
-				Business: 1,
 				Publish:  publish,
 			}) ; if err != nil {
+				tx.Rollback()
 				return
 			}
 			// sql事务提交

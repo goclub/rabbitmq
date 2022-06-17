@@ -4,7 +4,6 @@ import (
 	"github.com/streadway/amqp"
 	"log"
 	"os"
-	"runtime/debug"
 	"time"
 )
 
@@ -12,7 +11,7 @@ type Option struct {
 	// OnReconnect
 	// goclub/rabbitmq 封装后的 Connection 和 Channel 都有重连机制,当发生重连时会触发 OnReconnect
 	// OnReconnect 为 nil 时默认执行 log.Print(message, string(debug.Stack()))
-	OnReconnect func(message string)
+	OnReconnect func(reconnectID string, message string, err error)
 	// NotifyReturn 用于订阅发送时退回的消息 需在 Publish 时配合 Mandatory 使用
 	HandleNotifyReturn HandleNotifyReturn
 	Outbox OutboxOption
@@ -34,8 +33,8 @@ type HandleNotifyReturn struct {
 
 func (o *Option) init() (err error) {
 	if o.OnReconnect == nil {
-		o.OnReconnect = func(message string) {
-			log.Print(message, string(debug.Stack()))
+		o.OnReconnect = func(reconnectID string, message string, err error) {
+			log.Print(reconnectID, ": ", message, " ", err)
 		}
 	}
 	if o.HandleNotifyReturn.Return == nil {

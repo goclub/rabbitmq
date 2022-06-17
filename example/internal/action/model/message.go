@@ -22,3 +22,24 @@ func (v UserSignupMessage) Publishing () (p amqp.Publishing, err error) {
 		Body:  body,
 	}, nil
 }
+
+
+type SagaCreateOrderMessage struct {
+	SagaID uint64
+	AccountID uint64 `json:"accountID"`
+	SkuID uint64 `json:"skuID"`
+	InventoryDeductionReplySuccess bool `json:"inventoryDeductionReplySuccess"`
+}
+func (v *SagaCreateOrderMessage) DecodeDelivery(d *amqp.Delivery) error {
+	return xjson.Unmarshal(d.Body, v)
+}
+func (v SagaCreateOrderMessage) Publishing () (p amqp.Publishing, err error) {
+	body, err := xjson.Marshal(v) ; if err != nil {
+		return
+	}
+	return amqp.Publishing{
+		MessageId: rab.MessageID(),
+		ContentType: "application/json",
+		Body:  body,
+	}, nil
+}

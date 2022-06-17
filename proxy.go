@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	xerr "github.com/goclub/error"
 	xjson "github.com/goclub/json"
 	"github.com/streadway/amqp"
@@ -18,6 +17,7 @@ import (
 type ProxyConnection struct {
 	*amqp.Connection
 	opt Option
+	reconnectID *string
 }
 
 func Dial(url string, opt Option) (conn *ProxyConnection, err error) {
@@ -27,17 +27,14 @@ func Dial(url string, opt Option) (conn *ProxyConnection, err error) {
 	}, opt)
 }
 func DialConfig(url string, config amqp.Config, opt Option) (conn *ProxyConnection, err error) {
-	defer func() {
-		if err != nil {
-			err = xerr.WithStack(err)
-		}
-	}()
+	defer func() { if err != nil { err = xerr.WithStack(err) } }()
 	err = opt.init()
 	if err != nil {
 		return
 	}
 	conn = &ProxyConnection{
 		opt: opt,
+		reconnectID: new(string),
 	}
 	conn.Connection, err = amqp.DialConfig(url, config)
 	if err != nil {
@@ -45,21 +42,26 @@ func DialConfig(url string, config amqp.Config, opt Option) (conn *ProxyConnecti
 	}
 	go func() {
 		for {
-			notifyClose, ok := <-conn.NotifyClose(make(chan *amqp.Error))
-			if !ok {
-				conn.opt.OnReconnect("connection closed")
-				break
+			if *conn.reconnectID == "" {
+				*conn.reconnectID = MessageID()
 			}
-			conn.opt.OnReconnect(fmt.Sprintf("connection closed, reason: %v", notifyClose))
+			notifyClose, ok := <-conn.NotifyClose(make(chan *amqp.Error))
+			if ok == false {
+				// 如果调用 ProxyConnection{}.Close()关闭则退出routine
+				return
+			}
+			conn.opt.OnReconnect(*conn.reconnectID, "connection disconnected", notifyClose)
 			for {
 				time.Sleep(time.Second)
-				conn.Connection, err = amqp.DialConfig(url, config)
-				// 成功重连则break
-				if err == nil {
-					conn.opt.OnReconnect("reconnect success")
+				newConn, connErr := amqp.DialConfig(url, config)
+				if connErr == nil {
+					conn.opt.OnReconnect(*conn.reconnectID, "connection reconnect successfully", nil)
+					conn.Connection = newConn
+					// 成功重连则break退出当前循环,父循环依然会监听中断信号
 					break
+				} else {
+					conn.opt.OnReconnect(*conn.reconnectID, "connection reconnect failed", connErr)
 				}
-				conn.opt.OnReconnect(fmt.Sprintf("reconnect failed, err: %v", err))
 			}
 		}
 	}()
@@ -70,6 +72,7 @@ type ProxyChannel struct {
 	*amqp.Channel
 	closed int32
 	opt    Option
+	reconnectID *string
 }
 
 func (ch *ProxyChannel) IsClosed() bool {
@@ -97,6 +100,7 @@ func (conn *ProxyConnection) Channel() (channel *ProxyChannel, channelClose func
 
 	channel = &ProxyChannel{
 		opt: conn.opt,
+		reconnectID: conn.reconnectID,
 	}
 	amqpCh, err := conn.Connection.Channel()
 	if err != nil {
@@ -119,25 +123,27 @@ func (conn *ProxyConnection) Channel() (channel *ProxyChannel, channelClose func
 	}()
 	go func() {
 		for {
-			notifyClose := <-channel.Channel.NotifyClose(make(chan *amqp.Error))
-			// 暂时取消 close 逻辑观察极端情况下的重连
-			// if !ok || channel.IsClosed() {
-			// 	conn.opt.OnReconnect("channel closed")
-			// 	channel.Close() // close again, ensure closed flag set when connection closed
-			// 	break
-			// }
-			conn.opt.OnReconnect(fmt.Sprintf("channel closed, reason: %v", notifyClose))
+			notifyClose, ok := <-channel.Channel.NotifyClose(make(chan *amqp.Error))
+			if *conn.reconnectID == "" {
+				*conn.reconnectID = MessageID()
+			}
+			if ok == false {
+				// 如果代码主动关闭则退出routine
+				return
+			}
+			conn.opt.OnReconnect(*conn.reconnectID, "channel disconnected", notifyClose)
 			for {
 				time.Sleep(time.Second)
-				if conn.Connection != nil {
-					ch, err := conn.Connection.Channel()
-					if err == nil {
-						conn.opt.OnReconnect("channel recreate success")
-						channel.Channel = ch
-						break
-					}
+				newChannel, connectionErr := conn.Connection.Channel()
+				if connectionErr == nil {
+					conn.opt.OnReconnect(*conn.reconnectID, "channel recreate successfully", connectionErr)
+					*conn.reconnectID = ""
+					channel.Channel = newChannel
+					// 成功重连则break退出当前循环,父循环依然会监听中断信号
+					break
+				} else {
+					conn.opt.OnReconnect(*conn.reconnectID, "channel recreate failed",  connectionErr)
 				}
-				conn.opt.OnReconnect(fmt.Sprintf("channel recreate failed, err: %v", err))
 			}
 		}
 	}()
@@ -152,23 +158,27 @@ func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery, err
 	go func() {
 		for {
 			d, err := channel.Channel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait, args)
-			shouldBreak := false
+
+			firstTimeConsumeIsError := false
 			firstTimeErrHandleOnce.Do(func() {
 				firstTimeErrCh <- xerr.WithStack(err)
 				if err != nil {
-					// 第一次 consume 就失败,则通过 shouldBreak 退出
-					shouldBreak = true
+					firstTimeConsumeIsError = true
 				}
 			})
-
-			if shouldBreak {
-				// 退出 for 从而释放 go func
-				break
+			if firstTimeConsumeIsError {
+				// 第一次consume 就错误则退出 routine
+				return
+			}
+			if *channel.reconnectID == "" {
+				*channel.reconnectID = MessageID()
 			}
 			if err != nil {
-				channel.opt.OnReconnect(fmt.Sprintf("consume failed, err: %v", err))
+				channel.opt.OnReconnect(*channel.reconnectID, "consume failed", err)
 				time.Sleep(time.Second)
 				continue
+			} else {
+				channel.opt.OnReconnect(*channel.reconnectID, "consume successfully", err)
 			}
 
 			for msg := range d {
@@ -177,7 +187,8 @@ func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery, err
 			// sleep before IsClose call. closed flag may not set before sleep.
 			time.Sleep(time.Second)
 			if channel.IsClosed() {
-				break
+				// 代码主动关闭则退出routine
+				return
 			}
 		}
 	}()
