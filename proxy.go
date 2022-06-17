@@ -127,7 +127,7 @@ func (conn *ProxyConnection) Channel() (channel *ProxyChannel, channelClose func
 			if *conn.reconnectID == "" {
 				*conn.reconnectID = MessageID()
 			}
-			if ok == false {
+			if ok == false || channel.IsClosed() {
 				// 如果代码主动关闭则退出routine
 				return
 			}
@@ -155,6 +155,12 @@ func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery, err
 	queue, consumer, autoAck, exclusive, noLocal, noWait, args := consume.Flat()
 	firstTimeErrHandleOnce := sync.Once{}
 	firstTimeErrCh := make(chan error)
+	isFirstConsume := struct {
+		Is bool
+		sync.Mutex
+	}{
+		Is: true,
+	}
 	go func() {
 		for {
 			d, err := channel.Channel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait, args)
@@ -178,7 +184,13 @@ func (channel *ProxyChannel) Consume(consume Consume) (<-chan amqp.Delivery, err
 				time.Sleep(time.Second)
 				continue
 			} else {
-				channel.opt.OnReconnect(*channel.reconnectID, "consume successfully", err)
+				isFirstConsume.Lock()
+				if isFirstConsume.Is {
+					isFirstConsume.Is = false
+				} else {
+					channel.opt.OnReconnect(*channel.reconnectID, "consume successfully", err)
+				}
+				isFirstConsume.Unlock()
 			}
 
 			for msg := range d {
