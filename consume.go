@@ -65,7 +65,7 @@ func (h ConsumeDelivery) Do(ctx context.Context) (err error) {
 				case error:
 					panicErr = v
 				default:
-					panicErr = xerr.Errorf("%+v", r)
+					panicErr = xerr.New(fmt.Sprintf("%+v", r))
 				}
 				panicCh <- panicErr
 			}
